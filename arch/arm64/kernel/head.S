@@ -251,7 +251,6 @@ ENTRY(__boot_cpu_mode)
 	.quad	PAGE_OFFSET
 
 #ifdef CONFIG_SMP
-	.pushsection    .smp.pen.text, "ax"
 	.align	3
 1:	.quad	.
 	.quad	secondary_holding_pen_release
