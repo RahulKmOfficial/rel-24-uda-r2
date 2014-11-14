@@ -799,7 +799,6 @@ DT_MACHINE_START(VCM30_T124, "vcm30t124")
 	.init_irq	= irqchip_init,
         .init_time      = clocksource_of_init,
 	.init_machine	= tegra_vcm30_t124_dt_init,
-	.restart	= tegra_assert_system_reset,
 	.dt_compat	= vcm30_t124_dt_board_compat,
         .init_late      = tegra_init_late
 MACHINE_END

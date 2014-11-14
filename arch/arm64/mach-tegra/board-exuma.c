@@ -37,7 +37,6 @@ DT_MACHINE_START(TEGRA132_DT, "exuma")
 	.init_early	= tegra12x_init_early,
 	.init_late	= tegra_init_late,
 	.init_machine	= tegra_ardbeg_dt_init,
-	.restart	= tegra_assert_system_reset,
 	.dt_compat	= tegra132_dt_board_compat,
 MACHINE_END
 

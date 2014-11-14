@@ -97,6 +97,7 @@ obj-$(CONFIG_CPU_IDLE)                  += sleep.o
 obj-$(CONFIG_ARCH_TEGRA_12x_SOC)        += tegra12_clocks.o
 obj-$(CONFIG_SMP)                       += platsmp.o
 obj-y                                   += reset.o
+obj-y                                   += reboot.o
 obj-y                                   += headsmp.o
 obj-$(CONFIG_CPU_FREQ)                  += cpu-tegra.o
 ifeq ($(CONFIG_TEGRA_AUTO_HOTPLUG),y)
