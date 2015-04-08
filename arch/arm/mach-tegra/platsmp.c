@@ -29,6 +29,7 @@
 #include <asm/cputype.h>
 #include <asm/smp_plat.h>
 #include <asm/smp_scu.h>
+#include <asm/psci.h>
 #include <asm/fiq_glue.h>
 #if !defined(CONFIG_TRUSTED_FOUNDATIONS) && \
 	defined(CONFIG_ARCH_TEGRA_12x_SOC) && defined(CONFIG_FIQ_DEBUGGER)
@@ -267,6 +268,12 @@ static int tegra11x_power_up_cpu(unsigned int cpu)
 	BUG_ON(is_lp_cluster());
 
 	cpu = cpu_logical_map(cpu);
+
+#if defined(CONFIG_ARM_PSCI)
+	/* monitor takes care of CPU_ON */
+	if (tegra_cpu_is_secure())
+		return psci_ops.cpu_on(cpu, __pa(tegra_secondary_startup));
+#endif
 
 	if (cpu_isset(cpu, tegra_cpu_power_map)) {
 		/* set SCLK as event trigger for flow conroller */

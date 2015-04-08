@@ -68,7 +68,6 @@ static void tegra_cpu_reset_handler_enable(void)
 		writel(TEGRA_RESET_HANDLER_BASE +
 			tegra_cpu_reset_handler_offset, evp_cpu_reset);
 #endif
-
 		wmb();
 		reg = readl(evp_cpu_reset);
 

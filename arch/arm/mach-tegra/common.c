@@ -998,7 +998,7 @@ void __init tegra11x_init_early(void)
 void __init tegra12x_init_early(void)
 {
 	struct device_node *np =
-		of_find_compatible_node(NULL, NULL, "arm,psci");
+		of_find_compatible_node(NULL, NULL, "arm,psci-0.2");
 
 	if (np && of_device_is_available(np))
 		tegra_with_secure_firmware = 1;

@@ -338,7 +338,7 @@ void tegra_smp_save_power_mask(void);
 void tegra_smp_restore_power_mask(void);
 #endif
 
-u32 tegra_restart_prev_smc(void);
+u32 tegra_register_suspend_vectors(u32, u32);
 
 /* The debug channel uart base physical address */
 extern unsigned long  debug_uart_port_base;

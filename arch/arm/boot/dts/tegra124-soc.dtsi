@@ -642,10 +642,8 @@
 	};
 
 	psci {
-		compatible = "arm,psci";
+		compatible = "arm,psci-0.2";
 		method = "smc";
-		cpu_suspend = <0x84000001>;
-		cpu_on = <0x84000003>;
 	};
 
 	sdhci@700b0600 {
