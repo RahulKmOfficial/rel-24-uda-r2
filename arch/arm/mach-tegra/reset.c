@@ -43,9 +43,6 @@ static void tegra_cpu_reset_handler_enable(void)
 		IO_ADDRESS(TEGRA_EXCEPTION_VECTORS_BASE + 0x100);
 	void __iomem *sb_ctrl = IO_ADDRESS(TEGRA_SB_BASE);
 	unsigned long reg;
-#ifdef CONFIG_DENVER_CPU
-	extern void *__aarch64_tramp;
-#endif
 
 	BUG_ON(is_enabled);
 	BUG_ON(tegra_cpu_reset_handler_size > TEGRA_RESET_HANDLER_SIZE);
@@ -53,37 +50,23 @@ static void tegra_cpu_reset_handler_enable(void)
 	memcpy(iram_base, (void *)__tegra_cpu_reset_handler_start,
 		tegra_cpu_reset_handler_size);
 
-#if defined(CONFIG_ARM_PSCI)
-	if (psci_ops.cpu_on) {
-		psci_ops.cpu_on(0, TEGRA_RESET_HANDLER_BASE +
-			tegra_cpu_reset_handler_offset);
-	} else {
-#endif
+	/* NOTE: This must be the one and only write to the EVP CPU
+	 * reset vector in the entire system. */
+	writel(TEGRA_RESET_HANDLER_BASE +
+		tegra_cpu_reset_handler_offset, evp_cpu_reset);
+	wmb();
+	reg = readl(evp_cpu_reset);
 
-#ifdef CONFIG_DENVER_CPU
-		writel(virt_to_phys(&__aarch64_tramp), evp_cpu_reset);
-#else
-		/* NOTE: This must be the one and only write to the EVP CPU
-		 * reset vector in the entire system. */
-		writel(TEGRA_RESET_HANDLER_BASE +
-			tegra_cpu_reset_handler_offset, evp_cpu_reset);
-#endif
+	/*
+	 * Prevent further modifications to the physical reset vector.
+	 *  NOTE: Has no effect on chips prior to Tegra30.
+	 */
+	if (tegra_get_chip_id() != TEGRA_CHIPID_TEGRA2) {
+		reg = readl(sb_ctrl);
+		reg |= 2;
+		writel(reg, sb_ctrl);
 		wmb();
-		reg = readl(evp_cpu_reset);
-
-		/*
-		 * Prevent further modifications to the physical reset vector.
-		 *  NOTE: Has no effect on chips prior to Tegra30.
-		 */
-		if (tegra_get_chip_id() != TEGRA_CHIPID_TEGRA2) {
-			reg = readl(sb_ctrl);
-			reg |= 2;
-			writel(reg, sb_ctrl);
-			wmb();
-		}
-#if defined(CONFIG_ARM_PSCI)
 	}
-#endif
 
 	is_enabled = true;
 }
