@@ -1,7 +1,7 @@
 /*
  * GK20A Address Spaces
  *
- * Copyright (c) 2011-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -25,7 +25,6 @@ struct vm_gk20a;
 
 struct gk20a_as_share {
 	struct gk20a_as *as;
-	atomic_t ref_cnt;
 	int id;
 	struct vm_gk20a *vm;
 };
