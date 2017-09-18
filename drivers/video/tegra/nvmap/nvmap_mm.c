@@ -223,6 +223,12 @@ static int nvmap_prot_handle(struct nvmap_handle *handle, u32 offset,
 		struct vm_area_struct *prev;
 
 		vma = vma_list->vma;
+		/* vm_mm = NULL for the vma_copy created in v4l2.
+		 * ignore the kernel copy of vma. The protection fixing
+		 * for user copy of vma is good enough.
+		 */
+		if (!vma->vm_mm)
+			continue;
 		prev = vma->vm_prev;
 		priv = vma->vm_private_data;
 		if ((offset + size) > (vma->vm_end - vma->vm_start))
