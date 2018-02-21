@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2010 Google, Inc.
  *
- * Copyright (c) 2012-2016, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1226,7 +1226,6 @@ static int tegra_sdhci_set_uhs_signaling(struct sdhci_host *host,
 {
 	u16 clk, ctrl_2;
 	u32 vndr_ctrl, trim_delay, best_tap_value;
-	unsigned int dqs_trim_delay;
 	struct tegra_tuning_data *tuning_data;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_tegra *tegra_host = pltfm_host->priv;
@@ -1270,21 +1269,6 @@ static int tegra_sdhci_set_uhs_signaling(struct sdhci_host *host,
 
 	sdhci_writew(host, ctrl_2, SDHCI_HOST_CONTROL2);
 	sdhci_tegra_select_drive_strength(host, uhs);
-
-	if (uhs == MMC_TIMING_MMC_HS400) {
-		if (host->mmc->caps2 & MMC_CAP2_HS533)
-			dqs_trim_delay = plat->dqs_trim_delay_hs533;
-		else
-			dqs_trim_delay = plat->dqs_trim_delay;
-
-		ctrl_2 = sdhci_readl(host, SDHCI_VNDR_CAP_OVERRIDES_0);
-		ctrl_2 &= ~(SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_MASK <<
-			SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_SHIFT);
-		ctrl_2 |= ((dqs_trim_delay &
-			SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_MASK) <<
-			SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_SHIFT);
-		sdhci_writel(host, ctrl_2, SDHCI_VNDR_CAP_OVERRIDES_0);
-	}
 
 	if (uhs == MMC_TIMING_UHS_DDR50) {
 		clk = sdhci_readw(host, SDHCI_CLOCK_CONTROL);
@@ -1426,6 +1410,7 @@ static void tegra_sdhci_reset_exit(struct sdhci_host *host, u8 mask)
 	const struct sdhci_tegra_soc_data *soc_data = tegra_host->soc_data;
 	const struct tegra_sdhci_platform_data *plat = tegra_host->plat;
 	unsigned int best_tap_value;
+	u8 dqs_trim_delay;
 
 	if (!(mask & SDHCI_RESET_ALL))
 		return;
@@ -1458,6 +1443,19 @@ static void tegra_sdhci_reset_exit(struct sdhci_host *host, u8 mask)
 		}
 		sdhci_tegra_set_tap_delay(host, best_tap_value);
 	}
+
+	if (host->mmc->caps2 & MMC_CAP2_HS533)
+		dqs_trim_delay = plat->dqs_trim_delay_hs533;
+	else
+		dqs_trim_delay = plat->dqs_trim_delay;
+
+	vendor_ctrl = sdhci_readl(host, SDHCI_VNDR_CAP_OVERRIDES_0);
+	vendor_ctrl &= ~(SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_MASK <<
+		SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_SHIFT);
+	vendor_ctrl |= ((dqs_trim_delay &
+		SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_MASK) <<
+		SDHCI_VNDR_CAP_OVERRIDES_0_DQS_TRIM_SHIFT);
+	sdhci_writel(host, vendor_ctrl, SDHCI_VNDR_CAP_OVERRIDES_0);
 
 	vendor_ctrl = sdhci_readl(host, SDHCI_VNDR_CLK_CTRL);
 	if (soc_data->nvquirks & NVQUIRK_ENABLE_PADPIPE_CLKEN) {
