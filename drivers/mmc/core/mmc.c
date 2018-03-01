@@ -4,7 +4,7 @@
  *  Copyright (C) 2003-2004 Russell King, All Rights Reserved.
  *  Copyright (C) 2005-2007 Pierre Ossman, All Rights Reserved.
  *  MMCv4 support Copyright (C) 2006 Philip Langdale, All Rights Reserved.
- *  Copyright (c) 2012-2015, NVIDIA CORPORATION.  All rights reserved.
+ *  Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -914,7 +914,8 @@ static int mmc_select_hs200(struct mmc_card *card)
 	/* switch to HS200 mode if bus width set successfully */
 	if (!err)
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				 EXT_CSD_HS_TIMING, 2, 0);
+				 EXT_CSD_HS_TIMING, 2,
+				 card->ext_csd.generic_cmd6_time);
 err:
 	return err;
 }
@@ -966,9 +967,10 @@ static int mmc_select_hs400(struct mmc_card *card)
 	if (card->ext_csd.strobe_support &&
 			(host->caps2 & MMC_CAP2_EN_STROBE)) {
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				EXT_CSD_BUS_WIDTH,
-				EXT_CSD_DDR_BUS_WIDTH_8 | EXT_CSD_STROBE_MODE,
-				card->ext_csd.generic_cmd6_time);
+				 EXT_CSD_BUS_WIDTH,
+				 EXT_CSD_DDR_BUS_WIDTH_8 |
+				 EXT_CSD_STROBE_MODE,
+				 card->ext_csd.generic_cmd6_time);
 		if (!err) {
 			pr_info("%s: switch to strobe mode is successful\n",
 					mmc_hostname(card->host));
@@ -980,9 +982,9 @@ static int mmc_select_hs400(struct mmc_card *card)
 		}
 	} else {
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				EXT_CSD_BUS_WIDTH,
-				EXT_CSD_DDR_BUS_WIDTH_8,
-				card->ext_csd.generic_cmd6_time);
+				 EXT_CSD_BUS_WIDTH,
+				 EXT_CSD_DDR_BUS_WIDTH_8,
+				 card->ext_csd.generic_cmd6_time);
 		if (err) {
 			dev_err(mmc_dev(host),
 				"switch to DDR 8bit mode failed: %d\n", err);
@@ -992,7 +994,8 @@ static int mmc_select_hs400(struct mmc_card *card)
 
 	/* switch to HS400 mode */
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-			 EXT_CSD_HS_TIMING, 3, 0);
+			 EXT_CSD_HS_TIMING, 3,
+			 card->ext_csd.generic_cmd6_time);
 	if (err)
 		return err;
 
@@ -1275,6 +1278,8 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 				ddr = MMC_1_2V_DDR_MODE;
 	}
 
+	if (!oldcard)
+		host->card = card;
 	/*
 	 * Indicate HS200 SDR mode (if supported).
 	 */
@@ -1342,6 +1347,11 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		if (max_dtr == MMC_HS533_MAX_DTR)
 			mmc_card_set_hs533(card);
 		mmc_set_clock(host, max_dtr);
+		if (host->ops->post_init) {
+			mmc_host_clk_hold(card->host);
+			host->ops->post_init(host);
+			mmc_host_clk_release(card->host);
+		}
 		err = mmc_select_powerclass(card, EXT_CSD_DDR_BUS_WIDTH_8,
 				ext_csd);
 		if (err) {
@@ -1526,8 +1536,6 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			pr_warning("%s: Enabling cmdq failed\n",
 					mmc_hostname(card->host));
 	}
-	if (!oldcard)
-		host->card = card;
 
 	mmc_free_ext_csd(ext_csd);
 #ifdef CONFIG_MMC_FREQ_SCALING
@@ -1548,10 +1556,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		}
 	}
 #endif
-	if (mmc_card_hs400(card) && card->host->ops->post_init) {
-		mmc_host_clk_hold(card->host);
-		card->host->ops->post_init(card->host);
-		mmc_host_clk_release(card->host);
+	if (mmc_card_hs400(card)) {
 		if (host->caps & MMC_CAP_BUS_WIDTH_TEST)
 			err = mmc_bus_test(card, MMC_BUS_WIDTH_8);
 		else
