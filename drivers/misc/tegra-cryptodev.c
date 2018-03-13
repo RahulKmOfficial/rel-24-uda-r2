@@ -286,7 +286,8 @@ static int sha_async_hash_op(struct ahash_request *req,
 	return ret;
 }
 
-static int tegra_crypt_rsa(struct file *filp, struct tegra_crypto_ctx *ctx,
+static int tegra_crypt_rsa(struct file *filp,
+				struct tegra_crypto_ctx *ctx,
 				struct tegra_rsa_req *rsa_req)
 {
 	struct crypto_ahash *tfm = NULL;
@@ -298,6 +299,33 @@ static int tegra_crypt_rsa(struct file *filp, struct tegra_crypto_ctx *ctx,
 	unsigned long *xbuf[XBUFSIZE];
 	struct tegra_crypto_completion rsa_complete;
 	char rsa_algo[4][10] = {"rsa512", "rsa1024", "rsa1536", "rsa2048"};
+	unsigned int total_key_len;
+	char *key_mem;
+
+	if ((((rsa_req->keylen >> 16) & 0xFFFF) >
+			MAX_RSA_MSG_LEN) ||
+		((rsa_req->keylen & 0xFFFF) >
+			MAX_RSA_MSG_LEN)) {
+		pr_err("Invalid rsa key length\n");
+		return -EINVAL;
+	}
+
+	total_key_len = (((rsa_req->keylen >> 16) & 0xFFFF) +
+				(rsa_req->keylen & 0xFFFF));
+
+	key_mem = kzalloc(total_key_len, GFP_KERNEL);
+	if (!key_mem)
+		return -ENOMEM;
+
+	ret = copy_from_user(key_mem, (void __user *)rsa_req->key,
+			total_key_len);
+	if (ret) {
+		pr_err("%s: copy_from_user fail(%d)\n", __func__, ret);
+		kfree(key_mem);
+		return -EINVAL;
+	}
+
+	rsa_req->key = key_mem;
 
 	tfm = crypto_alloc_ahash(rsa_algo[rsa_req->algo],
 					CRYPTO_ALG_TYPE_AHASH, 0);
@@ -327,7 +355,6 @@ static int tegra_crypt_rsa(struct file *filp, struct tegra_crypto_ctx *ctx,
 
 	result = kzalloc(rsa_req->keylen >> 16, GFP_KERNEL);
 	if (!result) {
-		pr_err("\nresult alloc fail\n");
 		goto result_fail;
 	}
 
@@ -365,7 +392,8 @@ static int tegra_crypt_rsa(struct file *filp, struct tegra_crypto_ctx *ctx,
 		goto rsa_fail;
 	}
 
-	ret = copy_to_user((void __user *)rsa_req->result, (const void *)result,
+	ret = copy_to_user((void __user *)rsa_req->result,
+		(const void *)result,
 		crypto_ahash_digestsize(tfm));
 	if (ret) {
 		ret = -EFAULT;
@@ -381,6 +409,7 @@ buf_fail:
 req_fail:
 	crypto_free_ahash(tfm);
 out:
+	kfree(key_mem);
 	return ret;
 }
 
