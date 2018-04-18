@@ -4285,6 +4285,7 @@ static void tegra_xhci_downgrade_check_to_disable(struct usb_hcd *hcd,
 	struct tegra_xhci_hcd *tegra = hcd_to_tegra_xhci(hcd);
 	u32 portsc;
 	char serial[31];
+	unsigned long flags;
 
 	if (udev->serial) {
 		strncpy(serial, udev->serial, 30);
@@ -4325,7 +4326,7 @@ static void tegra_xhci_downgrade_check_to_disable(struct usb_hcd *hcd,
 				le16_to_cpu(udev->descriptor.idProduct));
 			pm_runtime_get_noresume(hcd->self.controller);
 			/* Port Power on for downgraded USB3.0 port */
-			spin_lock(&xhci->lock);
+			spin_lock_irqsave(&xhci->lock, flags);
 			portsc = xhci_readl(xhci,
 				xhci->usb3_ports[port_ptr->portnum
 					- 1]);
@@ -4334,9 +4335,9 @@ static void tegra_xhci_downgrade_check_to_disable(struct usb_hcd *hcd,
 				xhci_writel(xhci, portsc,
 					xhci->usb3_ports[port_ptr->portnum
 					- 1]);
-				spin_unlock(&xhci->lock);
+				spin_unlock_irqrestore(&xhci->lock, flags);
 				msleep(10);
-				spin_lock(&xhci->lock);
+				spin_lock_irqsave(&xhci->lock, flags);
 				portsc = xhci_readl(xhci,
 					xhci->usb3_ports[port_ptr->portnum
 						- 1]);
@@ -4348,7 +4349,7 @@ static void tegra_xhci_downgrade_check_to_disable(struct usb_hcd *hcd,
 					xhci->usb3_ports[port_ptr->portnum
 					- 1]);
 			}
-			spin_unlock(&xhci->lock);
+			spin_unlock_irqrestore(&xhci->lock, flags);
 			pm_runtime_put(hcd->self.controller);
 		}
 	}
@@ -4545,6 +4546,7 @@ static void tegra_xhci_downgrade_check_to_enable(struct usb_hcd *hcd,
 	struct usb_downgraded_port *port_ptr;
 	char *buf;
 	int udev_portnum;
+	unsigned long flags;
 
 	/* If connected to USB3.0 root hub */
 	if (xhci->shared_hcd->self.root_hub == udev->parent) {
@@ -4602,7 +4604,7 @@ static void tegra_xhci_downgrade_check_to_enable(struct usb_hcd *hcd,
 			mutex_lock(&tegra->sync_lock);
 
 			/* To disconnect gracefully */
-			spin_lock(&xhci->lock);
+			spin_lock_irqsave(&xhci->lock, flags);
 			portsc = xhci_readl(xhci,
 				xhci->usb3_ports[udev->portnum - 1]);
 			portsc |= PORT_PE;
@@ -4612,9 +4614,9 @@ static void tegra_xhci_downgrade_check_to_enable(struct usb_hcd *hcd,
 			/* save it, udev will disappear if disconnect */
 			udev_portnum = udev->portnum;
 
-			spin_unlock(&xhci->lock);
+			spin_unlock_irqrestore(&xhci->lock, flags);
 			msleep(10);
-			spin_lock(&xhci->lock);
+			spin_lock_irqsave(&xhci->lock, flags);
 
 			list_add_tail(&port_ptr->downgraded_list,
 				&hub_downgraded_list);
@@ -4625,9 +4627,9 @@ static void tegra_xhci_downgrade_check_to_enable(struct usb_hcd *hcd,
 				PORT_LINK_STROBE);
 			xhci_writel(xhci, portsc,
 				xhci->usb3_ports[udev_portnum - 1]);
-			spin_unlock(&xhci->lock);
+			spin_unlock_irqrestore(&xhci->lock, flags);
 			msleep(1);
-			spin_lock(&xhci->lock);
+			spin_lock_irqsave(&xhci->lock, flags);
 
 			/* Port Power off for downgraded USB3.0 port */
 			portsc = xhci_readl(xhci,
@@ -4635,7 +4637,7 @@ static void tegra_xhci_downgrade_check_to_enable(struct usb_hcd *hcd,
 			portsc &= ~(PORT_POWER | PORT_PE | PORT_CSC);
 			xhci_writel(xhci, portsc,
 				xhci->usb3_ports[udev_portnum - 1]);
-			spin_unlock(&xhci->lock);
+			spin_unlock_irqrestore(&xhci->lock, flags);
 			mutex_unlock(&tegra->sync_lock);
 			pm_runtime_put(hcd->self.controller);
 		}
@@ -5718,6 +5720,7 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 	unsigned port1;
 	u32 portsc;
 	int power_up_wait;
+	unsigned long flags;
 
 	hcd = xhci_to_hcd(tegra->xhci);
 	if ((downgrade_enabled == 0xffffffff) || (downgrade_enabled == 0)) {
@@ -5732,7 +5735,7 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 		mutex_lock(&tegra->sync_lock);
 		if (tegra->hc_in_elpg)
 			tegra_xhci_host_partition_elpg_exit(tegra);
-		spin_lock(&tegra->xhci->lock);
+		spin_lock_irqsave(&tegra->xhci->lock, flags);
 		power_up_wait = 0;
 		for (port1 = 1; port1 <= hdev30->maxchild; port1++) {
 			if (port1 > XUSB_SS_PORT_COUNT)
@@ -5759,9 +5762,9 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 			}
 		}
 		if (power_up_wait) {
-			spin_unlock(&tegra->xhci->lock);
+			spin_unlock_irqrestore(&tegra->xhci->lock, flags);
 			msleep(10);
-			spin_lock(&tegra->xhci->lock);
+			spin_lock_irqsave(&tegra->xhci->lock, flags);
 		}
 		if (downgrade_enabled == 0xffffffff) {
 			for (port1 = 1; port1 <= hdev30->maxchild; port1++) {
@@ -5780,10 +5783,11 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 					xhci_writel(tegra->xhci, portsc,
 						tegra->xhci->usb3_ports[port1
 						- 1]);
-					spin_unlock(&tegra->xhci->lock);
+					spin_unlock_irqrestore(
+						&tegra->xhci->lock, flags);
 					msleep(1);
-					spin_lock(&tegra->xhci->lock);
-
+					spin_lock_irqsave(&tegra->xhci->lock,
+						flags);
 					portsc = xhci_readl(tegra->xhci,
 						tegra->xhci->usb3_ports[port1
 						- 1]);
@@ -5812,13 +5816,16 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 					xhci_writel(tegra->xhci, portsc,
 						tegra->xhci->usb3_ports[port1 -
 						1]);
-					spin_unlock(&tegra->xhci->lock);
+					spin_unlock_irqrestore(
+						&tegra->xhci->lock, flags);
 					msleep(1);
-					spin_lock(&tegra->xhci->lock);
+					spin_lock_irqsave(&tegra->xhci->lock,
+						flags);
 				}
 			}
 			if (!power_up_wait) {
-				spin_unlock(&tegra->xhci->lock);
+				spin_unlock_irqrestore(&tegra->xhci->lock,
+					flags);
 				mutex_unlock(&tegra->sync_lock);
 				pm_runtime_put(hcd->self.controller);
 				return;
@@ -5838,7 +5845,7 @@ static void downgrade_usb3(struct device *dev, unsigned int downgrade_enabled)
 				}
 			}
 		}
-		spin_unlock(&tegra->xhci->lock);
+		spin_unlock_irqrestore(&tegra->xhci->lock, flags);
 		mutex_unlock(&tegra->sync_lock);
 		pm_runtime_put(hcd->self.controller);
 
