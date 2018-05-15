@@ -35,6 +35,7 @@
 		nvidia,en-io-trim-volt;
 		nvidia,is-emmc;
 		nvidia,enable-cq;
+		nvidia,enable-strobe-mode;
 		pll_source = "pll_p";
 	};
 
