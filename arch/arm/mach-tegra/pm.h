@@ -97,7 +97,6 @@ void tegra_bl_io_dpd_cleanup(void);
 unsigned long tegra_cpu_power_good_time(void);
 unsigned long tegra_cpu_power_off_time(void);
 unsigned long tegra_cpu_lp2_min_residency(void);
-unsigned long tegra_mc_clk_stop_min_residency(void);
 #ifdef CONFIG_ARCH_TEGRA_HAS_SYMMETRIC_CPU_PWR_GATE
 unsigned long tegra_min_residency_vmin_fmin(void);
 unsigned long tegra_min_residency_ncpu(void);
@@ -111,8 +110,6 @@ void tegra_limit_cpu_power_timers(unsigned long us_on, unsigned long us_off);
 void tegra_clear_cpu_in_pd(int cpu);
 bool tegra_set_cpu_in_pd(int cpu);
 
-void tegra_mc_clk_prepare(void);
-void tegra_mc_clk_finish(void);
 #ifdef CONFIG_TEGRA_LP1_LOW_COREVOLTAGE
 int tegra_is_lp1_suspend_mode(void);
 #endif

@@ -23,7 +23,6 @@
 enum {
 	TEGRA_ID_CPU_SUSPEND_LP0 = 1,
 	TEGRA_ID_CPU_SUSPEND_LP1 = 2,
-	TEGRA_ID_CPU_SUSPEND_LP1_STOP_MCCLK = 3,
 	TEGRA_ID_CPU_SUSPEND_CLUSTER = 4,
 	TEGRA_ID_CPU_SUSPEND_STDBY = 5,
 };
@@ -51,9 +50,6 @@ enum {
 #define TEGRA_POWER_CLUSTER_PART_SHIFT	24
 #define TEGRA_POWER_CLUSTER_FORCE_SHIFT	2
 #define TEGRA_POWER_CLUSTER_FORCE_MASK	(1 << TEGRA_POWER_CLUSTER_FORCE_SHIFT)
-
-/* Stop MC clock */
-#define TEGRA_POWER_STOP_MC_CLK		(1 << 23)
 
 #define TEGRA_POWER_SDRAM_SELFREFRESH	(1 << 26) /* SDRAM is in self-refresh */
 #define TEGRA_POWER_HOTPLUG_SHUTDOWN	(1 << 27) /* Hotplug shutdown */
@@ -360,10 +356,8 @@ extern unsigned int lp1_register_core_lowvolt;
 extern unsigned int lp1_register_core_highvolt;
 #endif
 void tegra3_tear_down_core(void);
-void tegra3_stop_mc_clk(void);
 int tegra3_sleep_core_finish(unsigned long int);
 int tegra3_sleep_cpu_secondary_finish(unsigned long int);
-int tegra3_stop_mc_clk_finish(unsigned long int);
 #endif
 
 extern unsigned long tegra_resume_timestamps_start;

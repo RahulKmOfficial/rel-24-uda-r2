@@ -295,32 +295,6 @@ ENTRY(tegra3_sleep_core_finish)
 	b	tegra_turn_off_mmu
 ENDPROC(tegra3_sleep_core_finish)
 
-ENTRY(tegra3_stop_mc_clk_finish)
-	mov	r4, r0
-	bl	tegra_flush_cache
-	mov	r0, r4
-	bl	tegra_cpu_exit_coherency
-
-	/* preload all the address literals that are needed for the
-	 * CPU power-gating process, to avoid loads from SDRAM (which are
-	 * not supported once SDRAM is put into self-refresh.
-	 * LP0 / LP1 use physical address, since the MMU needs to be
-	 * disabled before putting SDRAM into self-refresh to avoid
-	 * memory access due to page table walks */
-	mov32	r4, TEGRA_PMC_BASE
-	mov32	r5, TEGRA_CLK_RESET_BASE
-	mov32	r6, TEGRA_FLOW_CTRL_BASE
-	mov32	r7, TEGRA_TMRUS_BASE
-
-	mov32	r1, tegra3_stop_mc_clk
-	mov32	r2, tegra3_iram_start
-	sub	r1, r1, r2
-	mov32	r2, TEGRA_IRAM_CODE_AREA
-	add	r1, r1, r2
-	mov	r11, #1
-	b	tegra_turn_off_mmu
-ENDPROC(tegra3_stop_mc_clk_finish)
-
 /*
  * tegra3_sleep_cpu_secondary_finish(unsigned long v2p)
  *
@@ -418,46 +392,6 @@ ENTRY(tegra3_lp1_reset)
 	 * switch all SCLK/CCLK clocks to CLKM and set non STDBY clock source
 	 * enable PLLP, PLLM, PLLC, and PLLX. */
 
-	/* If resuming from MC clock stop state then enable EMC clock
-	 * other PLLs are not disabled */
-	ldr	r8, [r12, #RESET_DATA(MASK_MC_CLK)]
-	tst	r8, r11		@ if memory clock stopped
-	mov32	r2, TEGRA_PMC_BASE
-	beq	resume_lp1
-
-	/* If PLLM was enabled before entering MC clock stop state
-	 * then enable it else continue enabling EMC clock */
-	mov32	r0, TEGRA_CLK_RESET_BASE
-	ldr	r1, pllm_state
-	tst	r1, #0
-	bne	enable_mc
-
-	pll_iddq_exit r1, r0, CLK_RESET_PLLM_MISC, CLK_RESET_PLLM_MISC_IDDQ
-
-	mov32	r7, TEGRA_TMRUS_BASE
-	ldr	r1, [r7]
-	add	r1, r1, #2
-	wait_until r1, r7, r3
-	/* enable PLLM via PMC */
-	ldr	r1, [r2, #PMC_PLLP_WB0_OVERRIDE]
-	orr	r1, r1, #(1<<12)
-	str	r1, [r2, #PMC_PLLP_WB0_OVERRIDE]
-
-	pll_enable r1, r0, CLK_RESET_PLLM_BASE, 0
-	pll_locked r1, r0, CLK_RESET_PLLM_BASE
-
-	mov32	r7, TEGRA_TMRUS_BASE
-	ldr	r1, [r7]
-	add	r1, r1, #LOCK_DELAY
-	wait_until r1, r7, r3
-
-enable_mc:
-	mov32	r0, TEGRA_CLK_RESET_BASE
-	mov	r1, #(1 << 25)
-	str	r1, [r0, #CLK_RESET_CLK_ENB_H_SET]
-	b	emc_exit_selfrefresh
-
-resume_lp1:
 	mov32	r0, TEGRA_CLK_RESET_BASE
 
 	ldr	r7, [r12, #RESET_DATA(SECURE_FW_PRESENT)]
@@ -1073,44 +1007,6 @@ tegra3_lp0_tear_down_core:
 	bl	tegra3_cpu_clk32k
 	b	tegra3_enter_sleep
 ENDPROC(tegra3_tear_down_core)
-
-ENTRY(tegra3_stop_mc_clk)
-	bl	tegra3_save_config
-	bl	tegra3_sdram_self_refresh
-	mov	r1, #(1 << 25)
-	str	r1, [r5, #CLK_RESET_CLK_ENB_H_CLR]
-
-	/* Store PLLM state
-	 * If PLLP_WB0_OVERRIDE(Bit 11) is set then store
-	 * value OVERRIDE_ENABLE(Bit 12) else store CAR value */
-	ldr	r0, [r4, #PMC_PLLP_WB0_OVERRIDE]
-	and	r1, r0, #(1 << 12)
-	lsr	r1, #12
-	and	r0, r0, #(1 << 11)
-	lsr	r0, #11
-	and	r1, r1, r0
-
-	ldr	r2, [r5, #CLK_RESET_PLLM_BASE]
-	and	r2, r2, #(1 << 30)
-	lsr	r2, #30
-	bic	r2, r2, r0
-
-	orr	r1, r1, r2
-
-	str	r1, pllm_state
-
-	/* disable PLLM via PMC in LP1 */
-	ldr	r0, [r4, #PMC_PLLP_WB0_OVERRIDE]
-	bic	r0, r0, #(1 << 12)
-	str	r0, [r4, #PMC_PLLP_WB0_OVERRIDE]
-
-	/* disable PLLM in CAR */
-	ldr	r0, [r5, #CLK_RESET_PLLM_BASE]
-	bic	r0, r0, #(1 << 30)
-	str	r0, [r5, #CLK_RESET_PLLM_BASE]
-
-	b	tegra3_enter_sleep
-ENDPROC(tegra3_stop_mc_clk)
 
 /*
  * tegra3_cpu_clk32k

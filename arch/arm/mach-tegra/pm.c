@@ -119,7 +119,6 @@ static DEFINE_SPINLOCK(tegra_lp2_lock);
 static cpumask_t tegra_in_lp2;
 static cpumask_t *iram_cpu_lp2_mask;
 static unsigned long *iram_cpu_lp1_mask;
-static unsigned long *iram_mc_clk_mask;
 static u8 *iram_save;
 static unsigned long iram_save_size;
 static void __iomem *iram_code = IO_ADDRESS(TEGRA_IRAM_CODE_AREA);
@@ -335,15 +334,6 @@ unsigned long tegra_cpu_lp2_min_residency(void)
 		return 2000;
 
 	return pdata->cpu_lp2_min_residency;
-}
-
-#define TEGRA_MIN_RESIDENCY_MCLK_STOP	20000
-
-unsigned long tegra_mc_clk_stop_min_residency(void)
-{
-	return pdata && pdata->min_residency_mclk_stop
-			? pdata->min_residency_mclk_stop
-			: TEGRA_MIN_RESIDENCY_MCLK_STOP;
 }
 
 #ifdef CONFIG_ARCH_TEGRA_HAS_SYMMETRIC_CPU_PWR_GATE
@@ -711,29 +701,6 @@ static int tegra_sleep_cpu_fin(unsigned long v2p)
 	return 0;
 }
 
-static inline int tegra_stop_mc_clk_fin(unsigned long v2p)
-{
-#if defined(CONFIG_ARM_PSCI)
-	unsigned long entry = TEGRA_RESET_HANDLER_BASE +
-		tegra_cpu_reset_handler_offset;
-	struct psci_power_state pps = {
-		.id = TEGRA_ID_CPU_SUSPEND_LP1_STOP_MCCLK,
-		.type = PSCI_POWER_STATE_TYPE_POWER_DOWN
-	};
-
-	/* the monitor takes care of CPU suspend */
-	if (tegra_cpu_is_secure()) {
-		psci_ops.cpu_suspend(pps, entry);
-
-		/* we must never reach here */
-		BUG();
-	}
-#endif
-
-	tegra3_stop_mc_clk_finish(v2p);
-	return 0;
-}
-
 unsigned int tegra_idle_power_down_last(unsigned int sleep_time,
 					unsigned int flags)
 {
@@ -831,47 +798,7 @@ unsigned int tegra_idle_power_down_last(unsigned int sleep_time,
 #endif
 #endif
 
-	/* T148: Check for mem_req and mem_req_soon only if it is
-	 * MC clock stop state.
-	 */
-	if (flags & TEGRA_POWER_STOP_MC_CLK) {
-#if defined(CONFIG_ARCH_TEGRA_14x_SOC)
-		u32 val;
-
-		/* Check if mem_req or mem_req_soon is asserted or if voice
-		 * call is active call, if yes then we skip SDRAM
-		 * self-refresh and just do CPU power-gating.
-		 */
-		val = readl(pmc + PMC_IPC_STS);
-		if ((val & (PMC_IPC_STS_MEM_REQ | PMC_IPC_STS_MEM_REQ_SOON)) ||
-			tegra_is_voice_call_active()) {
-
-			/* Reset LP1 and MC clock mask if we skipping SDRAM
-			 * self-refresh.
-			 */
-			*iram_cpu_lp1_mask = 0;
-			*iram_mc_clk_mask = 0;
-			writel(0, pmc + PMC_SCRATCH41);
-
-			tegra_sleep_cpu(PHYS_OFFSET - PAGE_OFFSET);
-		} else {
-			/* Clear mem_sts since SDRAM will not be accessible
-			 * to BBC in this state.
-			 */
-			val = PMC_IPC_CLR_MEM_STS;
-			writel(val, pmc + PMC_IPC_CLR);
-
-			tegra_stop_mc_clk(PHYS_OFFSET - PAGE_OFFSET);
-		}
-#else
-		/* If it is not T148 then we do not have to
-		 * check mem_req and mem_req_soon.
-		 */
-		cpu_suspend(PHYS_OFFSET - PAGE_OFFSET, tegra_stop_mc_clk_fin);
-#endif
-	} else {
-		cpu_suspend(PHYS_OFFSET - PAGE_OFFSET, tegra_sleep_cpu_fin);
-	}
+	cpu_suspend(PHYS_OFFSET - PAGE_OFFSET, tegra_sleep_cpu_fin);
 
 #if defined(CONFIG_ARCH_TEGRA_14x_SOC)
 	tegra_init_cache(true);
@@ -916,28 +843,6 @@ unsigned int tegra_idle_power_down_last(unsigned int sleep_time,
 	}
 #endif
 	return remain;
-}
-
-void tegra_mc_clk_prepare(void)
-{
-	/* copy the reset vector and SDRAM shutdown code into IRAM */
-	memcpy(iram_save, iram_code, iram_save_size);
-	memcpy(iram_code, tegra_iram_start(), iram_save_size);
-
-	*iram_cpu_lp1_mask = 1;
-	*iram_mc_clk_mask = 1;
-
-	__raw_writel(virt_to_phys(tegra_resume), pmc + PMC_SCRATCH41);
-	wmb();
-}
-
-void tegra_mc_clk_finish(void)
-{
-	/* restore IRAM */
-	memcpy(iram_code, iram_save, iram_save_size);
-	*iram_cpu_lp1_mask = 0;
-	*iram_mc_clk_mask = 0;
-	writel(0, pmc + PMC_SCRATCH41);
 }
 
 #ifdef CONFIG_TEGRA_LP1_LOW_COREVOLTAGE
@@ -1919,7 +1824,6 @@ out:
 
 	iram_cpu_lp2_mask = tegra_cpu_lp2_mask;
 	iram_cpu_lp1_mask = tegra_cpu_lp1_mask;
-	iram_mc_clk_mask = tegra_mc_clk_mask;
 
 	/* clear io dpd settings before kernel */
 	tegra_bl_io_dpd_cleanup();
