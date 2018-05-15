@@ -427,10 +427,6 @@ static void resume_cpu_dfll_mode(unsigned int flags)
  */
 static __init int create_suspend_pgtable(void)
 {
-#if defined(CONFIG_ARM) && defined(CONFIG_ARM_PSCI)
-	uint32_t iram_stop_mc_clk_fn, iram_sleep_core_fn;
-#endif
-
 	tegra_pgd = pgd_alloc(&init_mm);
 	if (!tegra_pgd)
 		return -ENOMEM;
@@ -453,20 +449,6 @@ static __init int create_suspend_pgtable(void)
 #else
 	/* inner/outer write-back/write-allocate, sharable */
 	tegra_pgd_phys = (virt_to_phys(tegra_pgd) & PAGE_MASK) | 0x4A;
-#endif
-
-#if defined(CONFIG_ARM) && defined(CONFIG_ARM_PSCI)
-	if (tegra_cpu_is_secure()) {
-		/* register iram suspend vector address with monitor */
-		iram_sleep_core_fn = TEGRA_IRAM_CODE_AREA +
-			((uintptr_t)&tegra3_tear_down_core -
-			 (uintptr_t)tegra_iram_start());
-		iram_stop_mc_clk_fn = TEGRA_IRAM_CODE_AREA +
-			((uintptr_t)&tegra3_stop_mc_clk -
-			 (uintptr_t)tegra_iram_start());
-		tegra_register_suspend_vectors(iram_stop_mc_clk_fn,
-			iram_sleep_core_fn);
-	}
 #endif
 
 	return 0;
