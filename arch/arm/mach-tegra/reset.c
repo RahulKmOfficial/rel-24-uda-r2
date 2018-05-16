@@ -104,8 +104,12 @@ static int __init tegra_cpu_reset_handler_init(void)
 #endif
 
 #ifdef CONFIG_PM_SLEEP
-	__tegra_cpu_reset_handler_data[TEGRA_RESET_STARTUP_LP1] =
-		TEGRA_IRAM_CODE_AREA;
+	if (tegra_cpu_is_secure())
+		__tegra_cpu_reset_handler_data[TEGRA_RESET_STARTUP_LP1] =
+			virt_to_phys(tegra_resume);
+	else
+		__tegra_cpu_reset_handler_data[TEGRA_RESET_STARTUP_LP1] =
+			TEGRA_IRAM_CODE_AREA;
 	__tegra_cpu_reset_handler_data[TEGRA_RESET_STARTUP_LP2] =
 		virt_to_phys((void *)tegra_resume);
 #endif
@@ -124,11 +128,11 @@ static int __init tegra_cpu_reset_handler_init(void)
 		__pa(&__tegra_cpu_reset_handler_data[TEGRA_RESET_DATA_SIZE]));
 #endif
 
-	if (!tegra_cpu_is_dsim()) /* Can't write IRAM on DSIM/MTS (yet) */
-		tegra_cpu_reset_handler_enable();
-
 	__tegra_cpu_reset_handler_data[TEGRA_RESET_SECURE_FW_PRESENT] =
 		tegra_cpu_is_secure();
+
+	if (!tegra_cpu_is_dsim()) /* Can't write IRAM on DSIM/MTS (yet) */
+		tegra_cpu_reset_handler_enable();
 
 	return 0;
 }

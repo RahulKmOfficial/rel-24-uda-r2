@@ -856,6 +856,9 @@ static int tegra_common_suspend(void)
 {
 	void __iomem *mc = IO_ADDRESS(TEGRA_MC_BASE);
 
+	if (tegra_cpu_is_secure())
+		return 0;
+
 	tegra_sctx.mc[0] = readl(mc + MC_SECURITY_START);
 	tegra_sctx.mc[1] = readl(mc + MC_SECURITY_SIZE);
 	tegra_sctx.mc[2] = readl(mc + MC_SECURITY_CFG2);
@@ -886,6 +889,9 @@ static void tegra_common_resume(void)
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
 	void __iomem *emc = IO_ADDRESS(TEGRA_EMC_BASE);
 #endif
+
+	if (tegra_cpu_is_secure())
+		return;
 
 #if defined(CONFIG_ARCH_TEGRA_14x_SOC) || defined(CONFIG_ARCH_TEGRA_12x_SOC)
 	/* Clear DPD Enable */
@@ -985,12 +991,14 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 		boot_flag = readl(pmc + PMC_SCRATCH0);
 		pmc_32kwritel(boot_flag | 1, PMC_SCRATCH0);
 
-		pmc_32kwritel(tegra_lp0_vec_start, PMC_SCRATCH1);
+		if (!tegra_cpu_is_secure())
+			pmc_32kwritel(tegra_lp0_vec_start, PMC_SCRATCH1);
 
 		reg |= TEGRA_POWER_EFFECT_LP0;
 		/* No break here. LP0 code falls through to write SCRATCH41 */
 	case TEGRA_SUSPEND_LP1:
-		__raw_writel(virt_to_phys(tegra_resume), pmc + PMC_SCRATCH41);
+		if (!tegra_cpu_is_secure())
+			__raw_writel(virt_to_phys(tegra_resume), pmc + PMC_SCRATCH41);
 		wmb();
 		rate = clk_get_rate(tegra_clk_m);
 		break;
@@ -1729,13 +1737,16 @@ out:
 		plat->suspend_mode = TEGRA_SUSPEND_LP1;
 	}
 
-	iram_save_size = tegra_iram_end() - tegra_iram_start();
+	if (!tegra_cpu_is_secure()) {
+		iram_save_size = tegra_iram_end() - tegra_iram_start();
 
-	iram_save = kmalloc(iram_save_size, GFP_KERNEL);
-	if (!iram_save && (plat->suspend_mode >= TEGRA_SUSPEND_LP1)) {
-		pr_err("%s: unable to allocate memory for SDRAM self-refresh "
-		       "-- LP0/LP1 unavailable\n", __func__);
-		plat->suspend_mode = TEGRA_SUSPEND_LP2;
+		iram_save = kmalloc(iram_save_size, GFP_KERNEL);
+		if (!iram_save && (plat->suspend_mode >= TEGRA_SUSPEND_LP1)) {
+			pr_err("%s: unable to allocate memory for SDRAM "
+			       "self-refresh -- LP0/LP1 unavailable\n",
+			       __func__);
+			plat->suspend_mode = TEGRA_SUSPEND_LP2;
+		}
 	}
 
 #ifdef CONFIG_TEGRA_LP1_LOW_COREVOLTAGE
@@ -1760,7 +1771,8 @@ out:
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
 	writel(0, pmc + PMC_SCRATCH39);
 #endif
-	writel(0, pmc + PMC_SCRATCH41);
+	if (!tegra_cpu_is_secure())
+		writel(0, pmc + PMC_SCRATCH41);
 
 	/* Always enable CPU power request; just normal polarity is supported */
 	reg = readl(pmc + PMC_CTRL);
