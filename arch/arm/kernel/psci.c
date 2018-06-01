@@ -327,6 +327,9 @@ int __init psci_init(void)
 	if (!np)
 		return -ENODEV;
 
+	if (!of_device_is_available(np))
+		return -ENODEV;
+
 	init_fn = (psci_initcall_t)matched_np->data;
 	return init_fn(np);
 }
