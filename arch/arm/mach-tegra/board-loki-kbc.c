@@ -2,7 +2,7 @@
  * arch/arm/mach-tegra/board-loki-kbc.c
  * Keys configuration for Nvidia tegra4 loki platform.
  *
- * Copyright (c) 2012-2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -27,6 +27,7 @@
 #include <linux/gpio.h>
 #include <linux/gpio_keys.h>
 #include <linux/mfd/palmas.h>
+#include <linux/tegra-pmc.h>
 
 #include "tegra-board-id.h"
 #include "board.h"
@@ -107,9 +108,8 @@ static int loki_wakeup_key(void)
 {
 	int wakeup_key;
 	u64 status;
-	status = readl(IO_ADDRESS(TEGRA_PMC_BASE) + PMC_WAKE_STATUS)
-		| (u64)readl(IO_ADDRESS(TEGRA_PMC_BASE)
-		+ PMC_WAKE2_STATUS) << 32;
+	status = tegra_pmc_readl(PMC_WAKE_STATUS)
+		| (u64)tegra_pmc_readl(PMC_WAKE2_STATUS) << 32;
 
 	if (status & (1ULL << TEGRA_WAKE_GPIO_PQ0))
 		wakeup_key = KEY_POWER;

@@ -3,7 +3,7 @@
  *
  * Tegra3 SOC-specific power and cluster management
  *
- * Copyright (c) 2009-2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2009-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -736,8 +736,6 @@ static struct tegra_io_dpd tegra_list_io_dpd[] = {
 };
 #endif
 
-/* we want to cleanup bootloader io dpd setting in kernel */
-static void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 
 #if defined CONFIG_PM_SLEEP
 struct tegra_io_dpd *tegra_io_dpd_get(struct device *dev)
@@ -773,14 +771,14 @@ void tegra_io_dpd_enable(struct tegra_io_dpd *hnd)
 	spin_lock(&tegra_io_dpd_lock);
 	dpd_enable_lsb = (hnd->io_dpd_reg_index) ? APBDEV_DPD2_ENABLE_LSB :
 						APBDEV_DPD_ENABLE_LSB;
-	writel(0x1, pmc + PMC_DPD_SAMPLE);
-	writel(0x10, pmc + APBDEV_PMC_SEL_DPD_TIM_0);
+	tegra_pmc_writel(0x1, PMC_DPD_SAMPLE);
+	tegra_pmc_writel(0x10, APBDEV_PMC_SEL_DPD_TIM_0);
 	enable_mask = ((1 << hnd->io_dpd_bit) | (2 << dpd_enable_lsb));
-	writel(enable_mask, pmc + (APBDEV_PMC_IO_DPD_REQ_0 +
+	tegra_pmc_writel(enable_mask, (APBDEV_PMC_IO_DPD_REQ_0 +
 					hnd->io_dpd_reg_index * 8));
 	/* delay pclk * (reset APBDEV_PMC_SEL_DPD_TIM_0 value 127 + 5) */
 	udelay(7);
-	dpd_status = readl(pmc + (APBDEV_PMC_IO_DPD_STATUS_0 +
+	dpd_status = tegra_pmc_readl((APBDEV_PMC_IO_DPD_STATUS_0 +
 					hnd->io_dpd_reg_index * 8));
 	if (!(dpd_status & (1 << hnd->io_dpd_bit))) {
 		if (!tegra_platform_is_fpga()) {
@@ -789,7 +787,7 @@ void tegra_io_dpd_enable(struct tegra_io_dpd *hnd)
 		}
 	}
 	/* Sample register must be reset before next sample operation */
-	writel(0x0, pmc + PMC_DPD_SAMPLE);
+	tegra_pmc_writel(0x0, PMC_DPD_SAMPLE);
 	spin_unlock(&tegra_io_dpd_lock);
 	return;
 }
@@ -807,9 +805,9 @@ void tegra_io_dpd_disable(struct tegra_io_dpd *hnd)
 	dpd_enable_lsb = (hnd->io_dpd_reg_index) ? APBDEV_DPD2_ENABLE_LSB :
 						APBDEV_DPD_ENABLE_LSB;
 	enable_mask = ((1 << hnd->io_dpd_bit) | (1 << dpd_enable_lsb));
-	writel(enable_mask, pmc + (APBDEV_PMC_IO_DPD_REQ_0 +
+	tegra_pmc_writel(enable_mask, (APBDEV_PMC_IO_DPD_REQ_0 +
 					hnd->io_dpd_reg_index * 8));
-	dpd_status = readl(pmc + (APBDEV_PMC_IO_DPD_STATUS_0 +
+	dpd_status = tegra_pmc_readl((APBDEV_PMC_IO_DPD_STATUS_0 +
 					hnd->io_dpd_reg_index * 8));
 	if (dpd_status & (1 << hnd->io_dpd_bit)) {
 		if (!tegra_platform_is_fpga()) {
@@ -896,10 +894,9 @@ void tegra_bl_io_dpd_cleanup()
 		dpd_mask = ((1 << t3_io_dpd_req_regs[i].dpd_code_lsb) - 1);
 		dpd_mask |= (IO_DPD_CODE_OFF <<
 			t3_io_dpd_req_regs[i].dpd_code_lsb);
-		writel(dpd_mask, pmc + t3_io_dpd_req_regs[i].req_reg_off);
+		tegra_pmc_writel(dpd_mask, t3_io_dpd_req_regs[i].req_reg_off);
 		/* dpd status register is next to req reg in tegra3 */
-		dpd_status = readl(pmc +
-			(t3_io_dpd_req_regs[i].req_reg_off + 4));
+		dpd_status = tegra_pmc_readl((t3_io_dpd_req_regs[i].req_reg_off + 4));
 	}
 	return;
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google, Inc.
- * Copyright (c) 2010-2013, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2010-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * Author:
  *	Colin Cross <ccross@android.com>
@@ -39,7 +39,6 @@ int tegra_fuse_get_tsensor_spare_bits(u32 *spare_bits);
 
 /* PMC and CLK control registers required to determine the
    FUSE Programming cycles */
-extern u32 tegra_read_pmc_reg(int offset);
 extern u32 tegra_read_clk_ctrl_reg(int offset);
 extern u32 tegra_read_apb_misc_reg(int offset);
 extern enum tegra_revision tegra_chip_get_revision(void);

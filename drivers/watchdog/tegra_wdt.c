@@ -3,7 +3,7 @@
  *
  * watchdog driver for NVIDIA tegra internal watchdog
  *
- * Copyright (c) 2012-2015, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * based on drivers/watchdog/softdog.c and drivers/watchdog/omap_wdt.c
  *
@@ -40,6 +40,8 @@
 #ifdef CONFIG_TEGRA_FIQ_DEBUGGER
 #include <mach/irqs.h>
 #endif
+#include <linux/tegra-pmc.h>
+
 
 /* minimum and maximum watchdog trigger periods, in seconds */
 #define MIN_WDT_PERIOD	5
@@ -469,7 +471,7 @@ static void tegra_wdt_log_reset_reason(struct platform_device *pdev,
 	if (pdev->id > 0)
 		return;
 
-	val = readl(wdt->pmc_base + PMC_RST_STATUS) & 0x7;
+	val = tegra_pmc_readl(PMC_RST_STATUS) & 0x7;
 	if (val >= ARRAY_SIZE(reset_reason))
 		dev_info(&pdev->dev, "last reset value is invalid 0x%x\n", val);
 	else

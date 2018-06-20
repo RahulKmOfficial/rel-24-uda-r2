@@ -2,7 +2,7 @@
  * arch/arm/mach-tegra/common.c
  *
  * Copyright (C) 2010 Google, Inc.
- * Copyright (C) 2010-2014 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2010-2018 NVIDIA Corporation. All rights reserved.
  *
  * Author:
  *	Colin Cross <ccross@android.com>
@@ -2479,11 +2479,6 @@ static u32 tegra_chip_id;
 static u32 tegra_chip_bct_strapping;
 enum tegra_revision tegra_revision;
 
-u32 tegra_read_pmc_reg(int offset)
-{
-	return readl(IO_ADDRESS(TEGRA_PMC_BASE) + offset);
-}
-
 u32 tegra_read_clk_ctrl_reg(int offset)
 {
 	return readl(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + offset);
@@ -2530,7 +2525,7 @@ static void tegra_set_bct_strapping(void)
 {
 	u32 reg;
 #if defined(CONFIG_ARCH_TEGRA_12x_SOC)
-	reg = readl(IO_ADDRESS(TEGRA_PMC_BASE + STRAP_OPT));
+	reg = tegra_pmc_readl(STRAP_OPT);
 #else
 	reg = readl(IO_ADDRESS(TEGRA_APB_MISC_BASE + STRAP_OPT));
 #endif
@@ -2612,7 +2607,7 @@ static int __init tegra_get_last_reset_reason(void)
 		RESET_STR(deep sleep reset),
 	};
 
-	u32 val = readl(IO_ADDRESS(TEGRA_PMC_BASE) + PMC_RST_STATUS) & 0x7;
+	u32 val = tegra_pmc_readl(PMC_RST_STATUS) & 0x7;
 	if (val >= ARRAY_SIZE(reset_reason))
 		pr_info("last reset value is invalid 0x%x\n", val);
 	else

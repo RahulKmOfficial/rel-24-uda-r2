@@ -1,7 +1,7 @@
  /*
  * drivers/platform/tegra/reboot.c
  *
- * Copyright (c) 2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2014-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -38,7 +38,6 @@
 
 static int program_reboot_reason(const char *cmd)
 {
-	void __iomem *reset = IO_ADDRESS(TEGRA_PMC_BASE);
 	u32 reg;
 
 	if (tegra_platform_is_fpga() || NEVER_RESET) {
@@ -47,9 +46,9 @@ static int program_reboot_reason(const char *cmd)
 	}
 
 	/* clean up */
-	reg = readl_relaxed(reset + PMC_SCRATCH0);
+	reg = tegra_pmc_readl_relaxed(PMC_SCRATCH0);
 	reg &= ~(BOOTLOADER_MODE | RECOVERY_MODE | FORCED_RECOVERY_MODE);
-	writel_relaxed(reg, reset + PMC_SCRATCH0);
+	tegra_pmc_writel_relaxed(reg, PMC_SCRATCH0);
 
 	/* valid command? */
 	if (!cmd || (strlen(cmd) == 0))
@@ -64,14 +63,13 @@ static int program_reboot_reason(const char *cmd)
 		reg |= FORCED_RECOVERY_MODE;
 
 	/* write the restart command */
-	writel_relaxed(reg, reset + PMC_SCRATCH0);
+	tegra_pmc_writel_relaxed(reg, PMC_SCRATCH0);
 
 	return 0;
 }
 
 static void tegra_reboot_handler(enum reboot_mode mode, const char *cmd)
 {
-	void __iomem *reset = IO_ADDRESS(TEGRA_PMC_BASE);
 	int ret;
 	u32 reg;
 
@@ -82,9 +80,9 @@ static void tegra_reboot_handler(enum reboot_mode mode, const char *cmd)
 		pm_power_reset();
 	} else {
 		pr_info("%s: using PMC\n", __func__);
-		reg = readl_relaxed(reset);
+		reg = tegra_pmc_readl_relaxed(0);
 		reg |= 0x10;
-		writel_relaxed(reg, reset);
+		tegra_pmc_writel_relaxed(reg, 0);
 	}
 }
 

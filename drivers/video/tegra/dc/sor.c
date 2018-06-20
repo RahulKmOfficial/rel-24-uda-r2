@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/dc/sor.c
  *
- * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -23,6 +23,7 @@
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
 #include <linux/clk/tegra.h>
+#include <linux/tegra-pmc.h>
 
 #include <mach/dc.h>
 
@@ -604,16 +605,15 @@ static inline void tegra_dc_sor_update(struct tegra_dc_sor_data *sor)
 static void tegra_dc_sor_io_set_dpd(struct tegra_dc_sor_data *sor, bool up)
 {
 	u32 reg_val;
-	static void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
 	unsigned long timeout_jf;
 
 	if (up) {
-		writel(APBDEV_PMC_DPD_SAMPLE_ON_ENABLE,
-			pmc_base + APBDEV_PMC_DPD_SAMPLE);
-		writel(10, pmc_base + APBDEV_PMC_SEL_DPD_TIM);
+		tegra_pmc_writel(APBDEV_PMC_DPD_SAMPLE_ON_ENABLE,
+			APBDEV_PMC_DPD_SAMPLE);
+		tegra_pmc_writel(10, APBDEV_PMC_SEL_DPD_TIM);
 	}
 
-	reg_val = readl(pmc_base + APBDEV_PMC_IO_DPD2_REQ);
+	reg_val = tegra_pmc_readl(APBDEV_PMC_IO_DPD2_REQ);
 	reg_val &= ~(APBDEV_PMC_IO_DPD2_REQ_LVDS_ON ||
 		APBDEV_PMC_IO_DPD2_REQ_CODE_DEFAULT_MASK);
 
@@ -622,13 +622,13 @@ static void tegra_dc_sor_io_set_dpd(struct tegra_dc_sor_data *sor, bool up)
 		APBDEV_PMC_IO_DPD2_REQ_LVDS_OFF |
 		APBDEV_PMC_IO_DPD2_REQ_CODE_DPD_ON;
 
-	writel(reg_val, pmc_base + APBDEV_PMC_IO_DPD2_REQ);
+	tegra_pmc_writel(reg_val, APBDEV_PMC_IO_DPD2_REQ);
 
 	/* Polling */
 	timeout_jf = jiffies + msecs_to_jiffies(10);
 	do {
 		usleep_range(20, 40);
-		reg_val = readl(pmc_base + APBDEV_PMC_IO_DPD2_STATUS);
+		reg_val = tegra_pmc_readl(APBDEV_PMC_IO_DPD2_STATUS);
 	} while (((reg_val & APBDEV_PMC_IO_DPD2_STATUS_LVDS_ON) != 0) &&
 		time_after(timeout_jf, jiffies));
 
@@ -637,8 +637,8 @@ static void tegra_dc_sor_io_set_dpd(struct tegra_dc_sor_data *sor, bool up)
 			"PMC_IO_DPD2 polling failed (0x%x)\n", reg_val);
 
 	if (up)
-		writel(APBDEV_PMC_DPD_SAMPLE_ON_DISABLE,
-			pmc_base + APBDEV_PMC_DPD_SAMPLE);
+		tegra_pmc_writel(APBDEV_PMC_DPD_SAMPLE_ON_DISABLE,
+			APBDEV_PMC_DPD_SAMPLE);
 }
 
 

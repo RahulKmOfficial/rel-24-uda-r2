@@ -2,7 +2,7 @@
  * arch/arm/mach-tegra/powergate.c
  *
  * Copyright (c) 2010 Google, Inc
- * Copyright (c) 2011 - 2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011 - 2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * Author:
  *	Colin Cross <ccross@google.com>
@@ -35,6 +35,7 @@
 #include <linux/tegra-soc.h>
 #include <trace/events/power.h>
 #include <asm/atomic.h>
+#include <linux/tegra-pmc.h>
 
 #include "clock.h"
 #include "iomap.h"
@@ -74,7 +75,7 @@ int tegra_powergate_set(int id, bool new_state)
 
 	spin_lock_irqsave(lock, flags);
 
-	status = !!(pmc_read(PWRGATE_STATUS) & (1 << id));
+	status = !!(tegra_pmc_readl(PWRGATE_STATUS) & (1 << id));
 
 	if (status == new_state) {
 		spin_unlock_irqrestore(lock, flags);
@@ -84,8 +85,9 @@ int tegra_powergate_set(int id, bool new_state)
 	if (TEGRA_IS_CPU_POWERGATE_ID(id)) {
 		/* CPU ungated in s/w only during boot/resume with outer
 		   waiting loop and no contention from other CPUs */
-		pmc_write(PWRGATE_TOGGLE_START | id, PWRGATE_TOGGLE);
-		pmc_read(PWRGATE_TOGGLE);
+		tegra_pmc_writel(PWRGATE_TOGGLE_START |
+						id, PWRGATE_TOGGLE);
+		tegra_pmc_readl(PWRGATE_TOGGLE);
 		spin_unlock_irqrestore(lock, flags);
 		return 0;
 	}
@@ -94,7 +96,7 @@ int tegra_powergate_set(int id, bool new_state)
 	/* Wait if PMC is already processing some other power gating request */
 	do {
 		udelay(1);
-		reg = pmc_read(PWRGATE_TOGGLE);
+		reg = tegra_pmc_readl(PWRGATE_TOGGLE);
 		contention_timeout--;
 	} while ((contention_timeout > 0) && (reg & PWRGATE_TOGGLE_START));
 
@@ -105,13 +107,13 @@ int tegra_powergate_set(int id, bool new_state)
 #endif
 
 	/* Submit power gate request */
-	pmc_write(PWRGATE_TOGGLE_START | id, PWRGATE_TOGGLE);
+	tegra_pmc_writel(PWRGATE_TOGGLE_START | id, PWRGATE_TOGGLE);
 
 #if !defined(CONFIG_ARCH_TEGRA_3x_SOC)
 	/* Wait while PMC accepts the request */
 	do {
 		udelay(1);
-		reg = pmc_read(PWRGATE_TOGGLE);
+		reg = tegra_pmc_readl(PWRGATE_TOGGLE);
 		contention_timeout--;
 	} while ((contention_timeout > 0) && (reg & PWRGATE_TOGGLE_START));
 
@@ -125,7 +127,7 @@ int tegra_powergate_set(int id, bool new_state)
 	do {
 		do {
 			udelay(1);
-			status = !!(pmc_read(PWRGATE_STATUS) & (1 << id));
+			status = !!(tegra_pmc_readl(PWRGATE_STATUS) & (1 << id));
 
 			toggle_timeout--;
 		} while ((status != new_state) && (toggle_timeout > 0));
@@ -362,13 +364,13 @@ int tegra_powergate_remove_clamping(int id)
 	else
 		mask = (1 << id);
 
-	pmc_write(mask, REMOVE_CLAMPING);
+	tegra_pmc_writel(mask, REMOVE_CLAMPING);
 	/* Wait until clamp is removed */
 	do {
 		udelay(1);
 		contention_timeout--;
 	} while ((contention_timeout > 0)
-			&& (pmc_read(PWRGATE_CLAMP_STATUS) & BIT(id)));
+			&& (tegra_pmc_readl(PWRGATE_CLAMP_STATUS) & BIT(id)));
 
 	WARN(contention_timeout <= 0, "Couldn't remove clamping");
 
@@ -398,9 +400,9 @@ bool tegra_powergate_is_powered(int id)
 	if (pg_ops->powergate_is_powered)
 		return pg_ops->powergate_is_powered(id);
 	else
-		status = pmc_read(PWRGATE_STATUS) & (1 << id);
+		status = tegra_pmc_readl(PWRGATE_STATUS) & (1 << id);
 
-	status = pmc_read(PWRGATE_STATUS) & (1 << id);
+	status = tegra_pmc_readl(PWRGATE_STATUS) & (1 << id);
 
 	return !!status;
 }

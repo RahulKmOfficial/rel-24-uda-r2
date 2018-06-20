@@ -3,7 +3,7 @@
  *
  * Tegra 2 LP0 scratch register preservation
  *
- * Copyright (c) 2009-2012, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2009-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -296,13 +296,13 @@ static const struct pmc_scratch_field xm2_cfgd[] __initdata = {
 
 struct pmc_scratch_reg {
 	const struct pmc_scratch_field *fields;
-	void __iomem *scratch_addr;
+	u32 scratch_offs;
 	int num_fields;
 };
 
 #define scratch(offs, field_list)					\
 	{								\
-		.scratch_addr = IO_ADDRESS(TEGRA_PMC_BASE) + offs,	\
+		.scratch_offs = offs,	                                \
 		.fields = field_list,					\
 		.num_fields = ARRAY_SIZE(field_list),			\
 	}
@@ -352,7 +352,7 @@ void __init tegra2_lp0_suspend_init(void)
 			r |= v;
 		}
 
-		__raw_writel(r, scratch[i].scratch_addr);
+		tegra_pmc_raw_writel(r, scratch[i].scratch_offs);
 	}
 	wmb();
 }

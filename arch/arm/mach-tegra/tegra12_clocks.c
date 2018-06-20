@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/tegra12_clocks.c
  *
- * Copyright (C) 2011-2014 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2011-2018 NVIDIA Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@
 #include "tegra_cl_dvfs.h"
 #include "cpu-tegra.h"
 #include "tegra11_soctherm.h"
+#include <linux/tegra-pmc.h>
 
 #define RST_DEVICES_L			0x004
 #define RST_DEVICES_H			0x008
@@ -689,7 +690,6 @@ static void __iomem *reg_clk_base = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
 #ifdef CONFIG_ARCH_TEGRA_13x_SOC
 static void __iomem *reg_clk13_base = IO_ADDRESS(TEGRA_CLK13_RESET_BASE);
 #endif
-static void __iomem *reg_pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
 static void __iomem *misc_gp_base = IO_ADDRESS(TEGRA_APB_MISC_BASE);
 static void __iomem *reg_xusb_padctl_base = IO_ADDRESS(TEGRA_XUSB_PADCTL_BASE);
 
@@ -710,10 +710,6 @@ static int tegra_periph_clk_enable_refcount[CLK_OUT_ENB_NUM * 32];
 	__raw_writel(value, reg_clk_base + (reg))
 #define clk_readl(reg) \
 	__raw_readl(reg_clk_base + (reg))
-#define pmc_writel(value, reg) \
-	__raw_writel(value, reg_pmc_base + (reg))
-#define pmc_readl(reg) \
-	readl(reg_pmc_base + (reg))
 #define xusb_padctl_writel(value, reg) \
 	 __raw_writel(value, reg_xusb_padctl_base + (reg))
 #define xusb_padctl_readl(reg) \
@@ -2155,10 +2151,10 @@ static void tegra12_blink_clk_init(struct clk *c)
 {
 	u32 val;
 
-	val = pmc_readl(PMC_CTRL);
+	val = tegra_pmc_readl(PMC_CTRL);
 	c->state = (val & PMC_CTRL_BLINK_ENB) ? ON : OFF;
 	c->mul = 1;
-	val = pmc_readl(c->reg);
+	val = tegra_pmc_readl(c->reg);
 
 	if (val & PMC_BLINK_TIMER_ENB) {
 		unsigned int on_off;
@@ -2179,12 +2175,12 @@ static int tegra12_blink_clk_enable(struct clk *c)
 {
 	u32 val;
 
-	val = pmc_readl(PMC_DPD_PADS_ORIDE);
-	pmc_writel(val | PMC_DPD_PADS_ORIDE_BLINK_ENB, PMC_DPD_PADS_ORIDE);
+	val = tegra_pmc_readl(PMC_DPD_PADS_ORIDE);
+	tegra_pmc_raw_writel(val | PMC_DPD_PADS_ORIDE_BLINK_ENB, PMC_DPD_PADS_ORIDE);
 
-	val = pmc_readl(PMC_CTRL);
-	pmc_writel(val | PMC_CTRL_BLINK_ENB, PMC_CTRL);
-	pmc_readl(PMC_CTRL);
+	val = tegra_pmc_readl(PMC_CTRL);
+	tegra_pmc_raw_writel(val | PMC_CTRL_BLINK_ENB, PMC_CTRL);
+	tegra_pmc_readl(PMC_CTRL);
 
 	return 0;
 }
@@ -2193,12 +2189,12 @@ static void tegra12_blink_clk_disable(struct clk *c)
 {
 	u32 val;
 
-	val = pmc_readl(PMC_CTRL);
-	pmc_writel(val & ~PMC_CTRL_BLINK_ENB, PMC_CTRL);
+	val = tegra_pmc_readl(PMC_CTRL);
+	tegra_pmc_raw_writel(val & ~PMC_CTRL_BLINK_ENB, PMC_CTRL);
 
-	val = pmc_readl(PMC_DPD_PADS_ORIDE);
-	pmc_writel(val & ~PMC_DPD_PADS_ORIDE_BLINK_ENB, PMC_DPD_PADS_ORIDE);
-	pmc_readl(PMC_DPD_PADS_ORIDE);
+	val = tegra_pmc_readl(PMC_DPD_PADS_ORIDE);
+	tegra_pmc_raw_writel(val & ~PMC_DPD_PADS_ORIDE_BLINK_ENB, PMC_DPD_PADS_ORIDE);
+	tegra_pmc_readl(PMC_DPD_PADS_ORIDE);
 }
 
 static int tegra12_blink_clk_set_rate(struct clk *c, unsigned long rate)
@@ -2206,7 +2202,7 @@ static int tegra12_blink_clk_set_rate(struct clk *c, unsigned long rate)
 	unsigned long parent_rate = clk_get_rate(c->parent);
 	if (rate >= parent_rate) {
 		c->div = 1;
-		pmc_writel(0, c->reg);
+		tegra_pmc_raw_writel(0, c->reg);
 	} else {
 		unsigned int on_off;
 		u32 val;
@@ -2220,9 +2216,9 @@ static int tegra12_blink_clk_set_rate(struct clk *c, unsigned long rate)
 		on_off <<= PMC_BLINK_TIMER_DATA_OFF_SHIFT;
 		val |= on_off;
 		val |= PMC_BLINK_TIMER_ENB;
-		pmc_writel(val, c->reg);
+		tegra_pmc_raw_writel(val, c->reg);
 	}
-	pmc_readl(c->reg);
+	tegra_pmc_readl(c->reg);
 
 	return 0;
 }
@@ -3500,7 +3496,7 @@ static void tegra12_pllm_clk_init(struct clk *c)
 	c->min_rate =
 		DIV_ROUND_UP(c->u.pll.vco_min, pllm_p[PLLM_SW_PDIV_MAX]);
 
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 	if (val & PMC_PLLP_WB0_OVERRIDE_PLLM_OVERRIDE) {
 		c->state = (val & PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE) ? ON : OFF;
 
@@ -3508,7 +3504,7 @@ static void tegra12_pllm_clk_init(struct clk *c)
 		 * If bootloader does not initialize PLLM, kernel has to
 		 * initialize the register with sane value. */
 		if (c->state == OFF) {
-			val = pmc_readl(PMC_PLLM_WB0_OVERRIDE);
+			val = tegra_pmc_readl(PMC_PLLM_WB0_OVERRIDE);
 			m = (val & PLLM_BASE_DIVM_MASK) >> PLL_BASE_DIVM_SHIFT;
 			if (m != PLL_FIXED_MDIV(c, input_rate)) {
 				/* Copy DIVM and DIVN from PLLM_BASE */
@@ -3516,15 +3512,15 @@ static void tegra12_pllm_clk_init(struct clk *c)
 				val = clk_readl(c->reg + PLL_BASE);
 				val &= (PLLM_BASE_DIVM_MASK
 					| PLLM_BASE_DIVN_MASK);
-				pmc_writel(val, PMC_PLLM_WB0_OVERRIDE);
+				tegra_pmc_raw_writel(val, PMC_PLLM_WB0_OVERRIDE);
 			}
 		}
 
-		val = pmc_readl(PMC_PLLM_WB0_OVERRIDE_2);
+		val = tegra_pmc_readl(PMC_PLLM_WB0_OVERRIDE_2);
 		p = (val & PMC_PLLM_WB0_OVERRIDE_2_DIVP_MASK) >>
 			PMC_PLLM_WB0_OVERRIDE_2_DIVP_SHIFT;
 
-		val = pmc_readl(PMC_PLLM_WB0_OVERRIDE);
+		val = tegra_pmc_readl(PMC_PLLM_WB0_OVERRIDE);
 	} else {
 		val = clk_readl(c->reg + PLL_BASE);
 		c->state = (val & PLL_BASE_ENABLE) ? ON : OFF;
@@ -3552,10 +3548,10 @@ static int tegra12_pllm_clk_enable(struct clk *c)
 	val |= PLL_BASE_ENABLE;
 	clk_writel(val, c->reg + PLL_BASE);
 
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 	val |= PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE;
-	pmc_writel(val, PMC_PLLP_WB0_OVERRIDE);
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	tegra_pmc_raw_writel(val, PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 
 	tegra12_pll_clk_wait_for_lock(c, c->reg + PLL_BASE, PLL_BASE_LOCK);
 	return 0;
@@ -3567,10 +3563,10 @@ static void tegra12_pllm_clk_disable(struct clk *c)
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
 	/* Just disable both base and override - one would work */
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 	val &= ~PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE;
-	pmc_writel(val, PMC_PLLP_WB0_OVERRIDE);
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	tegra_pmc_raw_writel(val, PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 
 	val = clk_readl(c->reg + PLL_BASE);
 	val &= ~PLL_BASE_ENABLE;
@@ -3605,18 +3601,18 @@ static int tegra12_pllm_clk_set_rate(struct clk *c, unsigned long rate)
 	c->mul = sel->n;
 	c->div = sel->m * sel->p;
 
-	val = pmc_readl(PMC_PLLP_WB0_OVERRIDE);
+	val = tegra_pmc_readl(PMC_PLLP_WB0_OVERRIDE);
 	if (val & PMC_PLLP_WB0_OVERRIDE_PLLM_OVERRIDE) {
-		val = pmc_readl(PMC_PLLM_WB0_OVERRIDE_2);
+		val = tegra_pmc_readl(PMC_PLLM_WB0_OVERRIDE_2);
 		val &= ~PMC_PLLM_WB0_OVERRIDE_2_DIVP_MASK;
 		val |= pdiv << PMC_PLLM_WB0_OVERRIDE_2_DIVP_SHIFT;
-		pmc_writel(val, PMC_PLLM_WB0_OVERRIDE_2);
+		tegra_pmc_raw_writel(val, PMC_PLLM_WB0_OVERRIDE_2);
 
-		val = pmc_readl(PMC_PLLM_WB0_OVERRIDE);
+		val = tegra_pmc_readl(PMC_PLLM_WB0_OVERRIDE);
 		val &= ~(PLLM_BASE_DIVM_MASK | PLLM_BASE_DIVN_MASK);
 		val |= (sel->m << PLL_BASE_DIVM_SHIFT) |
 			(sel->n << PLL_BASE_DIVN_SHIFT);
-		pmc_writel(val, PMC_PLLM_WB0_OVERRIDE);
+		tegra_pmc_raw_writel(val, PMC_PLLM_WB0_OVERRIDE);
 	} else {
 		val = clk_readl(c->reg + PLL_BASE);
 		val &= ~(PLLM_BASE_DIVM_MASK | PLLM_BASE_DIVN_MASK |
@@ -5185,7 +5181,7 @@ static void tegra12_clk_out_init(struct clk *c)
 {
 	const struct clk_mux_sel *mux = 0;
 	const struct clk_mux_sel *sel;
-	u32 val = pmc_readl(c->reg);
+	u32 val = tegra_pmc_readl(c->reg);
 
 	c->state = (val & (0x1 << c->u.periph.clk_num)) ? ON : OFF;
 	c->mul = 1;
@@ -5208,10 +5204,10 @@ static int tegra12_clk_out_enable(struct clk *c)
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
 	spin_lock_irqsave(&clk_out_lock, flags);
-	val = pmc_readl(c->reg);
+	val = tegra_pmc_readl(c->reg);
 	val |= (0x1 << c->u.periph.clk_num);
-	pmc_writel(val, c->reg);
-	pmc_readl(c->reg);
+	tegra_pmc_raw_writel(val, c->reg);
+	tegra_pmc_readl(c->reg);
 	spin_unlock_irqrestore(&clk_out_lock, flags);
 
 	return 0;
@@ -5225,10 +5221,10 @@ static void tegra12_clk_out_disable(struct clk *c)
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
 	spin_lock_irqsave(&clk_out_lock, flags);
-	val = pmc_readl(c->reg);
+	val = tegra_pmc_readl(c->reg);
 	val &= ~(0x1 << c->u.periph.clk_num);
-	pmc_writel(val, c->reg);
-	pmc_readl(c->reg);
+	tegra_pmc_raw_writel(val, c->reg);
+	tegra_pmc_readl(c->reg);
 	spin_unlock_irqrestore(&clk_out_lock, flags);
 }
 
@@ -5246,11 +5242,11 @@ static int tegra12_clk_out_set_parent(struct clk *c, struct clk *p)
 				clk_enable(p);
 
 			spin_lock_irqsave(&clk_out_lock, flags);
-			val = pmc_readl(c->reg);
+			val = tegra_pmc_readl(c->reg);
 			val &= ~periph_clk_source_mask(c);
 			val |= (sel->value << periph_clk_source_shift(c));
-			pmc_writel(val, c->reg);
-			pmc_readl(c->reg);
+			tegra_pmc_raw_writel(val, c->reg);
+			tegra_pmc_readl(c->reg);
 			spin_unlock_irqrestore(&clk_out_lock, flags);
 
 			if (c->refcnt && c->parent)

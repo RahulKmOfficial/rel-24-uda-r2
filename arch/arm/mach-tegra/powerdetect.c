@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/powerdetect.c
  *
- * Copyright (c) 2011 - 2013, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011 - 2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@
 
 #include "board.h"
 #include "iomap.h"
+#include <linux/tegra-pmc.h>
 
 #define PMC_PWR_IO_DISABLE	0x44
 #define PMC_PWR_DET_ENABLE	0x48
@@ -53,18 +54,6 @@ static u32 pwrio_val;
 static u32 pwrio_disabled_mask;
 
 static DEFINE_SPINLOCK(pwr_lock);
-
-static void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
-
-static inline void pmc_writel(u32 val, unsigned long addr)
-{
-	writel(val, pmc_base + addr);
-}
-static inline u32 pmc_readl(unsigned long addr)
-{
-	return readl(pmc_base + addr);
-}
-
 
 #define POWER_CELL(_reg_id, _pwrdet_mask, _pwrio_mask, _package_mask)	\
 	{								\
@@ -116,43 +105,43 @@ static struct pwr_detect_cell pwr_detect_cells[] = {
 
 static void pwr_detect_reset(u32 pwrdet_mask)
 {
-	pmc_writel(pwrdet_mask, PMC_PWR_DET_ENABLE);
+	tegra_pmc_raw_writel(pwrdet_mask, PMC_PWR_DET_ENABLE);
 	barrier();
-	pmc_writel(pwrdet_mask, PMC_PWR_DET_VAL);
+	tegra_pmc_raw_writel(pwrdet_mask, PMC_PWR_DET_VAL);
 
-	pmc_readl(PMC_PWR_DET_VAL);
-	pmc_writel(0, PMC_PWR_DET_ENABLE);
+	tegra_pmc_readl(PMC_PWR_DET_VAL);
+	tegra_pmc_raw_writel(0, PMC_PWR_DET_ENABLE);
 }
 
 static void pwr_detect_start(u32 pwrdet_mask)
 {
-	pmc_writel(pwrdet_mask, PMC_PWR_DET_ENABLE);
+	tegra_pmc_raw_writel(pwrdet_mask, PMC_PWR_DET_ENABLE);
 	udelay(4);
 
-	pmc_writel(1, PMC_PWR_DET_LATCH);
-	pmc_readl(PMC_PWR_DET_LATCH);
+	tegra_pmc_raw_writel(1, PMC_PWR_DET_LATCH);
+	tegra_pmc_readl(PMC_PWR_DET_LATCH);
 }
 
 static void pwr_detect_latch(void)
 {
-	pmc_writel(0, PMC_PWR_DET_LATCH);
+	tegra_pmc_raw_writel(0, PMC_PWR_DET_LATCH);
 
-	pmc_readl(PMC_PWR_DET_VAL);
-	pmc_writel(0, PMC_PWR_DET_ENABLE);
+	tegra_pmc_readl(PMC_PWR_DET_VAL);
+	tegra_pmc_raw_writel(0, PMC_PWR_DET_ENABLE);
 }
 
 static void pwr_io_enable(u32 pwrio_mask)
 {
-	u32 val = pmc_readl(PMC_PWR_IO_DISABLE);
+	u32 val = tegra_pmc_readl(PMC_PWR_IO_DISABLE);
 	val &= ~pwrio_mask;
-	pmc_writel(val, PMC_PWR_IO_DISABLE);
+	tegra_pmc_raw_writel(val, PMC_PWR_IO_DISABLE);
 }
 
 static void pwr_io_disable(u32 pwrio_mask)
 {
-	u32 val = pmc_readl(PMC_PWR_IO_DISABLE);
+	u32 val = tegra_pmc_readl(PMC_PWR_IO_DISABLE);
 	val |= pwrio_mask;
-	pmc_writel(val, PMC_PWR_IO_DISABLE);
+	tegra_pmc_raw_writel(val, PMC_PWR_IO_DISABLE);
 }
 
 static int pwrdet_always_on_set(const char *arg, const struct kernel_param *kp)
@@ -219,7 +208,7 @@ module_param_cb(pwrio_always_on, &pwrio_always_on_ops,
 
 static int pwrdet_val_get(char *buffer, const struct kernel_param *kp)
 {
-	pwrdet_val = pmc_readl(PMC_PWR_DET_VAL);
+	pwrdet_val = tegra_pmc_readl(PMC_PWR_DET_VAL);
 	return param_get_ulong(buffer, kp);
 }
 static struct kernel_param_ops pwrdet_val_ops = {
@@ -229,7 +218,7 @@ module_param_cb(pwrdet_val, &pwrdet_val_ops, &pwrdet_val, 0444);
 
 static int pwrio_val_get(char *buffer, const struct kernel_param *kp)
 {
-	pwrio_val = pmc_readl(PMC_PWR_IO_DISABLE);
+	pwrio_val = tegra_pmc_readl(PMC_PWR_IO_DISABLE);
 	return param_get_ulong(buffer, kp);
 }
 static struct kernel_param_ops pwrio_val_ops = {
@@ -277,7 +266,9 @@ static int pwrdet_notify_cb(
 
 	pr_debug("tegra: %s: event %lu, pwrdet 0x%x, pwrio 0x%x\n",
 		cell->reg_id, event,
-		pmc_readl(PMC_PWR_DET_VAL), pmc_readl(PMC_PWR_IO_DISABLE));
+		tegra_pmc_readl(PMC_PWR_DET_VAL),
+		tegra_pmc_readl(PMC_PWR_IO_DISABLE));
+
 	spin_unlock_irqrestore(&pwr_lock, flags);
 
 	return NOTIFY_OK;

@@ -1,5 +1,6 @@
 /* drivers/i2c/chips/a2220.c - a2220 voice processor driver
  *
+ * Copyright (c) 2011-2018, NVIDIA Corporation. All Rights Reserved.
  * Copyright (C) 2009 HTC Corporation.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -32,6 +33,7 @@
 #include <linux/a2220_fw.h>
 #include <linux/kthread.h>
 #include <linux/clk.h>
+#include <linux/tegra-pmc.h>
 
 #include <mach/iomap.h>
 #include <linux/io.h>
@@ -1109,7 +1111,6 @@ static int a2220_probe(struct i2c_client *client,
 {
 	int rc = 0, ret;
 	unsigned long val;
-	void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
 
 	extern3_clk = clk_get_sys("extern3", NULL);
 	if (IS_ERR(extern3_clk)) {
@@ -1125,14 +1126,14 @@ static int a2220_probe(struct i2c_client *client,
 
 	control_a2220_clk = 1;
 	/* disable master enable in PMC */
-	val = readl(pmc_base + PMC_CLK_OUT);
+	val = tegra_pmc_readl(PMC_CLK_OUT);
 	val |= CLK3_SRC_SEL;
 
-	writel(val, pmc_base + PMC_CLK_OUT);
+	tegra_pmc_writel(val, PMC_CLK_OUT);
 
-	val = readl(pmc_base + PMC_CLK_OUT);
+	val = tegra_pmc_readl(PMC_CLK_OUT);
 	val |= CLK3_FORCE_EN;
-	writel(val, pmc_base + PMC_CLK_OUT);
+	tegra_pmc_writel(val, PMC_CLK_OUT);
 
 	pdata = client->dev.platform_data;
 

@@ -1,7 +1,7 @@
 /*
  * ahci-tegra.c - AHCI SATA support for TEGRA AHCI device
  *
- * Copyright (c) 2011-2015, NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2011-2018, NVIDIA Corporation.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -44,6 +44,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/pm_runtime.h>
 #include "ahci.h"
+#include <linux/tegra-pmc.h>
 
 #include <linux/clk.h>
 #include <linux/clk/tegra.h>
@@ -542,16 +543,16 @@ static inline void xusb_writel(u32 val, u32 offset)
 static inline u32 pmc_readl(u32 offset)
 {
 	u32 val;
-	val = readl(IO_ADDRESS(TEGRA_PMC_BASE + offset));
-	AHCI_DBG_PRINT("[0x%x] => 0x%08x\n", TEGRA_PMC_BASE+offset, val);
+	val = tegra_pmc_readl(offset);
+	AHCI_DBG_PRINT("[0x%x] => 0x%08x\n", offset, val);
 	return val;
 }
 
 static inline void pmc_writel(u32 val, u32 offset)
 {
-	AHCI_DBG_PRINT("[0x%x] <= 0x%08x\n", TEGRA_PMC_BASE+offset, val);
-	writel(val, IO_ADDRESS(TEGRA_PMC_BASE + offset));
-	readl(IO_ADDRESS(TEGRA_PMC_BASE + offset));
+	AHCI_DBG_PRINT("[0x%x] <= 0x%08x\n", offset, val);
+	tegra_pmc_writel(val, offset);
+	tegra_pmc_readl(offset);
 }
 
 static inline u32 clk_readl(u32 offset)

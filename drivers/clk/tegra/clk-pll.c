@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -20,6 +20,7 @@
 #include <linux/err.h>
 #include <linux/clk-provider.h>
 #include <linux/clk.h>
+#include <linux/tegra-pmc.h>
 
 #include "clk.h"
 
@@ -216,7 +217,7 @@ static int clk_pll_is_enabled(struct clk_hw *hw)
 	u32 val;
 
 	if (pll->flags & TEGRA_PLLM) {
-		val = readl_relaxed(pll->pmc + PMC_PLLP_WB0_OVERRIDE);
+		val = tegra_pmc_readl_relaxed(PMC_PLLP_WB0_OVERRIDE);
 		if (val & PMC_PLLP_WB0_OVERRIDE_PLLM_OVERRIDE)
 			return val & PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE ? 1 : 0;
 	}
@@ -240,9 +241,9 @@ static void _clk_pll_enable(struct clk_hw *hw)
 	pll_writel_base(val, pll);
 
 	if (pll->flags & TEGRA_PLLM) {
-		val = readl_relaxed(pll->pmc + PMC_PLLP_WB0_OVERRIDE);
+		val = tegra_pmc_readl_relaxed(PMC_PLLP_WB0_OVERRIDE);
 		val |= PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE;
-		writel_relaxed(val, pll->pmc + PMC_PLLP_WB0_OVERRIDE);
+		tegra_pmc_writel_relaxed(val, PMC_PLLP_WB0_OVERRIDE);
 	}
 }
 
@@ -258,9 +259,9 @@ static void _clk_pll_disable(struct clk_hw *hw)
 	pll_writel_base(val, pll);
 
 	if (pll->flags & TEGRA_PLLM) {
-		val = readl_relaxed(pll->pmc + PMC_PLLP_WB0_OVERRIDE);
+		val = tegra_pmc_readl_relaxed(PMC_PLLP_WB0_OVERRIDE);
 		val &= ~PMC_PLLP_WB0_OVERRIDE_PLLM_ENABLE;
-		writel_relaxed(val, pll->pmc + PMC_PLLP_WB0_OVERRIDE);
+		tegra_pmc_writel_relaxed(val, PMC_PLLP_WB0_OVERRIDE);
 	}
 }
 
@@ -589,17 +590,17 @@ static int clk_plle_training(struct tegra_clk_pll *pll)
 	 * PLLE is already disabled, and setup cleared;
 	 * create falling edge on PLLE IDDQ input.
 	 */
-	val = readl(pll->pmc + PMC_SATA_PWRGT);
+	val = tegra_pmc_readl(PMC_SATA_PWRGT);
 	val |= PMC_SATA_PWRGT_PLLE_IDDQ_VALUE;
-	writel(val, pll->pmc + PMC_SATA_PWRGT);
+	tegra_pmc_writel(val, PMC_SATA_PWRGT);
 
-	val = readl(pll->pmc + PMC_SATA_PWRGT);
+	val = tegra_pmc_readl(PMC_SATA_PWRGT);
 	val |= PMC_SATA_PWRGT_PLLE_IDDQ_SWCTL;
-	writel(val, pll->pmc + PMC_SATA_PWRGT);
+	tegra_pmc_writel(val, PMC_SATA_PWRGT);
 
-	val = readl(pll->pmc + PMC_SATA_PWRGT);
+	val = tegra_pmc_readl(PMC_SATA_PWRGT);
 	val &= ~PMC_SATA_PWRGT_PLLE_IDDQ_VALUE;
-	writel(val, pll->pmc + PMC_SATA_PWRGT);
+	tegra_pmc_writel(val, PMC_SATA_PWRGT);
 
 	val = pll_readl_misc(pll);
 
@@ -883,17 +884,17 @@ static int clk_pllm_set_rate(struct clk_hw *hw, unsigned long rate,
 
 	cfg.p -= 1;
 
-	val = readl_relaxed(pll->pmc + PMC_PLLM_WB0_OVERRIDE);
+	val = tegra_pmc_readl_relaxed(PMC_PLLM_WB0_OVERRIDE);
 	if (val & PMC_PLLP_WB0_OVERRIDE_PLLM_OVERRIDE) {
-		val = readl_relaxed(pll->pmc + PMC_PLLM_WB0_OVERRIDE_2);
+		val = tegra_pmc_readl_relaxed(PMC_PLLM_WB0_OVERRIDE_2);
 		val = cfg.p ? (val | PMC_PLLM_WB0_OVERRIDE_2_DIVP_MASK) :
 			(val & ~PMC_PLLM_WB0_OVERRIDE_2_DIVP_MASK);
-		writel_relaxed(val, pll->pmc + PMC_PLLM_WB0_OVERRIDE_2);
+		tegra_pmc_writel_relaxed(val, PMC_PLLM_WB0_OVERRIDE_2);
 
-		val = readl_relaxed(pll->pmc + PMC_PLLM_WB0_OVERRIDE);
+		val = tegra_pmc_readl_relaxed(PMC_PLLM_WB0_OVERRIDE);
 		val &= ~(divn_mask(pll) | divm_mask(pll));
 		val |= (cfg.m << pll->divm_shift) | (cfg.n << pll->divn_shift);
-		writel_relaxed(val, pll->pmc + PMC_PLLM_WB0_OVERRIDE);
+		tegra_pmc_writel_relaxed(val, PMC_PLLM_WB0_OVERRIDE);
 	} else
 		_update_pll_mnp(pll, &cfg);
 

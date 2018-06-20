@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -46,18 +46,6 @@ static inline u32 mc_read(unsigned long reg)
 static inline void mc_write(u32 val, unsigned long reg)
 {
 	writel_relaxed(val, mc + reg);
-}
-
-/* PMC register read/write */
-static void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
-static inline u32 pmc_read(unsigned long reg)
-{
-	return readl(pmc + reg);
-}
-
-static inline void pmc_write(u32 val, unsigned long reg)
-{
-	writel_relaxed(val, pmc + reg);
 }
 
 enum clk_type {

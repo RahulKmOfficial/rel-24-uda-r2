@@ -4,7 +4,7 @@
  *
  * Support for Tegra Security Engine hardware crypto algorithms.
  *
- * Copyright (c) 2011-2014, NVIDIA Corporation. All Rights Reserved.
+ * Copyright (c) 2011-2018, NVIDIA Corporation. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@
 #include <crypto/sha.h>
 #include <linux/pm_runtime.h>
 #include <linux/tegra_pm_domains.h>
+#include <linux/tegra-pmc.h>
 
 #include "tegra-se.h"
 
@@ -3411,8 +3412,8 @@ int se_suspend(struct device *dev, bool polling)
 	}
 
 	/* Write lp context buffer address into PMC scratch register */
-	writel(page_to_phys(vmalloc_to_page(se_dev->ctx_save_buf)),
-		se_dev->pmc_io_reg + PMC_SCRATCH43_REG_OFFSET);
+	tegra_pmc_writel(page_to_phys(vmalloc_to_page(se_dev->ctx_save_buf)),
+		PMC_SCRATCH43_REG_OFFSET);
 
 	/* Saves SRK in secure scratch */
 	err = tegra_se_save_SRK(se_dev);

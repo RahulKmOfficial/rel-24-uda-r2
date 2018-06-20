@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google, Inc.
- * Copyright (c) 2012-2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * Author:
  *	Colin Cross <ccross@android.com>
@@ -37,6 +37,7 @@
 #include <linux/wakelock.h>
 #include <linux/tegra-soc.h>
 #include <linux/tegra-fuse.h>
+#include <linux/tegra-pmc.h>
 
 #ifdef CONFIG_ARM64
 #include <asm/mmu.h>
@@ -1010,7 +1011,7 @@ int tegra_fuse_program(struct device *dev,
 	}
 
 	/* calculate the number of program cycles from the oscillator freq */
-	reg = tegra_read_pmc_reg(PMC_PLLP_OVERRIDE);
+	reg = tegra_pmc_readl(PMC_PLLP_OVERRIDE);
 	if (reg & PMC_OSC_OVERRIDE) {
 		index = (reg & PMC_OSC_FREQ_MASK) >> PMC_OSC_FREQ_SHIFT;
 	} else {

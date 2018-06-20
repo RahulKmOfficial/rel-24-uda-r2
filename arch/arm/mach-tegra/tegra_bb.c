@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/tegra_bb.c
  *
- * Copyright (C) 2012-2014 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2012-2018 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -40,6 +40,7 @@
 #include <mach/tegra_emc.h>
 
 #include "clock.h"
+#include <linux/tegra-pmc.h>
 #include "iomap.h"
 #include "sleep.h"
 #include "pm.h"
@@ -57,21 +58,21 @@
 #define BBC_MC_MIN_FREQ		600000000
 #define BBC_MC_MAX_FREQ		700000000
 
-#define PMC_EVENT_COUNTER_0		(0x44c)
-#define PMC_EVENT_COUNTER_0_EN_MASK	(1<<20)
-#define PMC_EVENT_COUNTER_0_LP0BB	(0<<16)
-#define PMC_EVENT_COUNTER_0_LP0ACTIVE	(1<<16)
+#define PMC_EVENT_COUNTER_0            (0x44c)
+#define PMC_EVENT_COUNTER_0_EN_MASK    (1<<20)
+#define PMC_EVENT_COUNTER_0_LP0BB      (0<<16)
+#define PMC_EVENT_COUNTER_0_LP0ACTIVE  (1<<16)
 
-#define PMC_IPC_STS_0			(0x500)
-#define AP2BB_RESET_SHIFT		(1)
-#define AP2BB_RESET_DEFAULT_MASK	(1)
-#define BB2AP_MEM_REQ_SHIFT		(3)
-#define BB2AP_MEM_REQ_SOON_SHIFT	(4)
+#define PMC_IPC_STS_0                  (0x500)
+#define AP2BB_RESET_SHIFT              (1)
+#define AP2BB_RESET_DEFAULT_MASK       (1)
+#define BB2AP_MEM_REQ_SHIFT            (3)
+#define BB2AP_MEM_REQ_SOON_SHIFT       (4)
 
-#define PMC_IPC_SET_0			(0x504)
-#define AP2BB_MEM_STS_SHIFT		(5)
+#define PMC_IPC_SET_0                  (0x504)
+#define AP2BB_MEM_STS_SHIFT            (5)
 
-#define PMC_IPC_CLEAR_0			(0x508)
+#define PMC_IPC_CLEAR_0                        (0x508)
 
 #define FLOW_IPC_STS_0			(0x500)
 #define AP2BB_MSC_STS_SHIFT		(4)
@@ -244,10 +245,9 @@ EXPORT_SYMBOL_GPL(tegra_bb_check_ipc);
 int tegra_bb_check_bb2ap_ipc(void)
 {
 	void __iomem *fctrl = IO_ADDRESS(TEGRA_FLOW_CTRL_BASE);
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	int sts;
 
-	sts = readl(pmc + PMC_IPC_STS_0);
+	sts = tegra_pmc_readl(PMC_IPC_STS_0);
 	sts = sts >> AP2BB_RESET_SHIFT;
 	sts &= AP2BB_RESET_DEFAULT_MASK;
 	if (!sts)
@@ -437,7 +437,6 @@ static ssize_t store_tegra_bb_reset(struct device *dev,
 {
 	int ret, value;
 	static bool regulator_status;
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	struct tegra_bb *bb = dev_get_drvdata(dev);
 
 	if (!bb) {
@@ -457,8 +456,9 @@ static ssize_t store_tegra_bb_reset(struct device *dev,
 
 	/* reset is active low - sysfs interface assume reset is active high */
 	if (value) {
-		writel(1 << AP2BB_RESET_SHIFT | 1 << AP2BB_MEM_STS_SHIFT,
-			pmc + PMC_IPC_CLEAR_0);
+			tegra_pmc_writel(1 << AP2BB_RESET_SHIFT |
+			1 << AP2BB_MEM_STS_SHIFT,
+			PMC_IPC_CLEAR_0);
 
 		if (regulator_status == true) {
 			pr_debug("%s: disabling bbc regulators\n", __func__);
@@ -487,8 +487,9 @@ static ssize_t store_tegra_bb_reset(struct device *dev,
 			tegra_bb_enable_mem_req_soon();
 		}
 
-		writel(1 << AP2BB_RESET_SHIFT | 1 << AP2BB_MEM_STS_SHIFT,
-			pmc + PMC_IPC_SET_0);
+		tegra_pmc_writel(1 << AP2BB_RESET_SHIFT |
+			1 << AP2BB_MEM_STS_SHIFT,
+			PMC_IPC_SET_0);
 	}
 
 	return ret;
@@ -499,10 +500,9 @@ static ssize_t show_tegra_bb_reset(struct device *dev,
 				      char *buf)
 {
 	int sts;
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	/* reset is active low - sysfs interface assume reset is active high */
 
-	sts = readl(pmc + PMC_IPC_STS_0);
+	sts = tegra_pmc_readl(PMC_IPC_STS_0);
 	dev_dbg(dev, "%s IPC_STS=0x%x\n", __func__, (unsigned int)sts);
 	sts = ~sts >> AP2BB_RESET_SHIFT;
 	sts &= AP2BB_RESET_DEFAULT_MASK;
@@ -519,9 +519,8 @@ static ssize_t show_tegra_bb_state(struct device *dev,
 				      char *buf)
 {
 	unsigned int sts, mem_req, mem_req_soon;
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 
-	sts = readl(pmc + PMC_IPC_STS_0);
+	sts = tegra_pmc_readl(PMC_IPC_STS_0);
 	dev_dbg(dev, "%s IPC_STS=0x%x\n", __func__, (unsigned int)sts);
 
 	mem_req = (sts >> BB2AP_MEM_REQ_SHIFT) & 1;
@@ -652,8 +651,7 @@ static irqreturn_t tegra_bb_mem_req_soon(int irq, void *data)
 
 static inline void pmc_32kwritel(u32 val, unsigned long offs)
 {
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
-	writel(val, pmc + offs);
+	tegra_pmc_writel(val, offs);
 	udelay(130);
 }
 
@@ -662,12 +660,11 @@ static void tegra_bb_enable_pmc_wake(void)
 	/* Set PMC wake interrupt on active low
 	 * please see Bug 1181348 for details of SW WAR
 	 */
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
-	u32 reg = readl(pmc + PMC_CTRL2);
+	u32 reg = tegra_pmc_readl(PMC_CTRL2);
 	reg &= ~(PMC_CTRL2_WAKE_DET_EN);
 	pmc_32kwritel(reg, PMC_CTRL2);
 
-	reg = readl(pmc + PMC_WAKE2_LEVEL);
+	reg = tegra_pmc_readl(PMC_WAKE2_LEVEL);
 	reg &= ~(PMC_WAKE2_BB_MEM_REQ);
 	pmc_32kwritel(reg, PMC_WAKE2_LEVEL);
 
@@ -675,11 +672,11 @@ static void tegra_bb_enable_pmc_wake(void)
 	pmc_32kwritel(1, PMC_AUTO_WAKE_LVL);
 
 	usleep_range(1000, 1100);
-	reg = readl(pmc + PMC_WAKE2_MASK);
+	reg = tegra_pmc_readl(PMC_WAKE2_MASK);
 	reg |= PMC_WAKE2_BB_MEM_REQ;
 	pmc_32kwritel(reg, PMC_WAKE2_MASK);
 
-	reg = readl(pmc + PMC_CTRL2);
+	reg = tegra_pmc_readl(PMC_CTRL2);
 	reg |= PMC_CTRL2_WAKE_DET_EN;
 	pmc_32kwritel(reg, PMC_CTRL2);
 
@@ -689,13 +686,12 @@ static void tegra_bb_enable_pmc_wake(void)
 static irqreturn_t tegra_pmc_wake_intr(int irq, void *data)
 {
 	struct tegra_bb *bb = (struct tegra_bb *)data;
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	static void __iomem *tert_ictlr = IO_ADDRESS(TEGRA_TERTIARY_ICTLR_BASE);
 	u32 lic, sts;
 	int mem_req_soon;
 
 	spin_lock(&bb->lock);
-	sts = readl(pmc + PMC_IPC_STS_0);
+	sts = tegra_pmc_readl(PMC_IPC_STS_0);
 	mem_req_soon = (sts >> BB2AP_MEM_REQ_SOON_SHIFT) & 1;
 
 	/* clear interrupt */
@@ -821,7 +817,6 @@ EXPORT_SYMBOL(tegra_bb_set_emc_floor);
 static int tegra_bb_pm_notifier_event(struct notifier_block *this,
 					unsigned long event, void *ptr)
 {
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	struct tegra_bb *bb = container_of(this, struct tegra_bb, pm_notifier);
 	int sts, mem_req_soon;
 
@@ -830,7 +825,7 @@ static int tegra_bb_pm_notifier_event(struct notifier_block *this,
 		return NOTIFY_OK;
 	}
 
-	sts = readl(pmc + PMC_IPC_STS_0);
+	sts = tegra_pmc_readl(PMC_IPC_STS_0);
 	mem_req_soon = (sts >> BB2AP_MEM_REQ_SOON_SHIFT) & 1;
 	sts = sts >> AP2BB_RESET_SHIFT;
 	sts &= AP2BB_RESET_DEFAULT_MASK;
@@ -1234,18 +1229,17 @@ static enum pmc_event_sel {
 
 static int lp0bb_transitions_set(void *data, u64 val)
 {
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	u32 reg;
 
 	if (!val) {
 		/* disable event counting and clear counter */
 		reg = 0;
-		writel(reg, pmc + PMC_EVENT_COUNTER_0);
+		tegra_pmc_writel(reg, PMC_EVENT_COUNTER_0);
 		pmc_event_sel = PMC_EVENT_NONE;
 	} else if (val == 1) {
 		reg = PMC_EVENT_COUNTER_0_EN_MASK | PMC_EVENT_COUNTER_0_LP0BB;
 		 /* lp0->lp0bb transitions */
-		writel(reg, pmc + PMC_EVENT_COUNTER_0);
+		tegra_pmc_writel(reg, PMC_EVENT_COUNTER_0);
 		pmc_event_sel = PMC_EVENT_LP0BB;
 	}
 	return 0;
@@ -1253,8 +1247,7 @@ static int lp0bb_transitions_set(void *data, u64 val)
 
 static inline unsigned long read_pmc_event_counter(void)
 {
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
-	u32 reg = readl(pmc + PMC_EVENT_COUNTER_0);
+	u32 reg = tegra_pmc_readl(PMC_EVENT_COUNTER_0);
 	/* hw event counter is 16 bit */
 	reg = reg & 0xffff;
 	return reg;
@@ -1273,19 +1266,18 @@ DEFINE_SIMPLE_ATTRIBUTE(lp0bb_fops, lp0bb_transitions_get,
 
 static int lp0active_transitions_set(void *data, u64 val)
 {
-	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 	u32 reg;
 
 	if (!val) {
 		/* disable event counting and clear counter */
 		reg = 0;
-		writel(reg, pmc + PMC_EVENT_COUNTER_0);
+		tegra_pmc_writel(reg, PMC_EVENT_COUNTER_0);
 		pmc_event_sel = PMC_EVENT_NONE;
 	} else if (val == 1) {
 		reg = PMC_EVENT_COUNTER_0_EN_MASK |
 				PMC_EVENT_COUNTER_0_LP0ACTIVE;
 		 /* lp0->active transitions */
-		writel(reg, pmc + PMC_EVENT_COUNTER_0);
+		tegra_pmc_writel(reg, PMC_EVENT_COUNTER_0);
 		pmc_event_sel = PMC_EVENT_LP0ACTIVE;
 	}
 	return 0;

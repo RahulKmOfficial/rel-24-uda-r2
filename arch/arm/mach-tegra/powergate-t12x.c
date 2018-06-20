@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -23,6 +23,7 @@
 #include "powergate-ops-txx.h"
 #include "powergate-ops-t1xx.h"
 #include "dvfs.h"
+#include <linux/tegra-pmc.h>
 
 enum mc_client {
 	MC_CLIENT_AFI		= 0,
@@ -417,8 +418,8 @@ static int tegra12x_gpu_powergate(int id, struct powergate_partition_info *pg_in
 	udelay(10);
 
 	/* enable clamp */
-	pmc_write(0x1, PMC_GPU_RG_CNTRL_0);
-	pmc_read(PMC_GPU_RG_CNTRL_0);
+	tegra_pmc_writel(0x1, PMC_GPU_RG_CNTRL_0);
+	tegra_pmc_readl(PMC_GPU_RG_CNTRL_0);
 
 	udelay(10);
 
@@ -505,8 +506,8 @@ static int tegra12x_gpu_unpowergate(int id,
 	udelay(10);
 
 	/* disable clamp */
-	pmc_write(0, PMC_GPU_RG_CNTRL_0);
-	pmc_read(PMC_GPU_RG_CNTRL_0);
+	tegra_pmc_writel(0, PMC_GPU_RG_CNTRL_0);
+	tegra_pmc_readl(PMC_GPU_RG_CNTRL_0);
 
 	udelay(10);
 
@@ -826,7 +827,7 @@ bool tegra12x_powergate_is_powered(int id)
 		if (gpu_rail)
 			return tegra_dvfs_is_rail_up(gpu_rail);
 	} else {
-		status = pmc_read(PWRGATE_STATUS) & (1 << id);
+		status = tegra_pmc_readl(PWRGATE_STATUS) & (1 << id);
 		return !!status;
 	}
 	return status;

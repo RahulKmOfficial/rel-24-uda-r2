@@ -3,7 +3,7 @@
  *
  * CPU idle driver for Tegra2 CPUs
  *
- * Copyright (c) 2010-2013, NVIDIA Corporation.   All rights reserved.
+ * Copyright (c) 2010-2018, NVIDIA Corporation.   All rights reserved.
  * Copyright (c) 2011 Google, Inc.
  * Author: Colin Cross <ccross@android.com>
  *         Gary King <gking@nvidia.com>
@@ -51,6 +51,7 @@
 #include "sleep.h"
 #include "timer.h"
 #include "dvfs.h"
+#include <linux/tegra-pmc.h>
 
 static struct {
 	unsigned int cpu_ready_count[2];
@@ -77,7 +78,6 @@ static inline unsigned int time_to_bin(unsigned int time)
 #define CLK_RST_CONTROLLER_RST_CPU_CMPLX_CLR	0x344
 
 static void __iomem *clk_rst = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
-static void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 static s64 tegra_cpu1_wake_by_time = LLONG_MAX;
 
 static int tegra2_reset_sleeping_cpu(int cpu)
@@ -88,7 +88,7 @@ static int tegra2_reset_sleeping_cpu(int cpu)
 	BUG_ON(cpu == smp_processor_id());
 	tegra_pen_lock();
 
-	if (readl(pmc + PMC_SCRATCH41) == CPU_RESETTABLE)
+	if (tegra_pmc_readl(PMC_SCRATCH41) == CPU_RESETTABLE)
 		tegra2_cpu_reset(cpu);
 	else
 		ret = -EINVAL;

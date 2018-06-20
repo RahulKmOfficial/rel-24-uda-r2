@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -22,6 +22,7 @@
 #include <linux/of_address.h>
 #include <linux/clk/tegra.h>
 #include <linux/delay.h>
+#include <linux/tegra-pmc.h>
 
 #include "clk.h"
 
@@ -1060,7 +1061,7 @@ static void __init tegra20_pmc_clk_init(void)
 	struct clk *clk;
 
 	/* blink */
-	writel_relaxed(0, pmc_base + PMC_BLINK_TIMER);
+	tegra_pmc_writel_relaxed(0, PMC_BLINK_TIMER);
 	clk = clk_register_gate(NULL, "blink_override", "clk_32k", 0,
 				pmc_base + PMC_DPD_PADS_ORIDE,
 				PMC_DPD_PADS_ORIDE_BLINK_ENB, 0, NULL);

@@ -3,7 +3,7 @@
  *
  * CPU complex suspend & resume functions for Tegra SoCs
  *
- * Copyright (c) 2009-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2009-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -110,7 +110,6 @@ struct suspend_context {
 
 	struct tegra_twd_context twd;
 };
-#define PMC_CTRL		0x0
 
 #ifdef CONFIG_PM_SLEEP
 phys_addr_t tegra_pgd_phys;	/* pgd used by hotplug & LP2 bootup */
@@ -123,7 +122,6 @@ static u8 *iram_save;
 static unsigned long iram_save_size;
 static void __iomem *iram_code = IO_ADDRESS(TEGRA_IRAM_CODE_AREA);
 static void __iomem *clk_rst = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
-static void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
 #if defined(CONFIG_ARCH_TEGRA_14x_SOC)
 static void __iomem *tert_ictlr = IO_ADDRESS(TEGRA_TERTIARY_ICTLR_BASE);
 #endif
@@ -448,7 +446,7 @@ static __init int create_suspend_pgtable(void)
  * serialize into the 32KHz domain */
 static void pmc_32kwritel(u32 val, unsigned long offs)
 {
-	writel(val, pmc + offs);
+	tegra_pmc_writel(val, offs);
 	udelay(130);
 }
 
@@ -468,11 +466,11 @@ static void set_power_timers(unsigned long us_on, unsigned long us_off,
 	if ((rate != tegra_last_pclk) || (us_off != last_us_off)) {
 		ticks = (us_on * pclk) + 999999ull;
 		do_div(ticks, 1000000);
-		writel((unsigned long)ticks, pmc + PMC_CPUPWRGOOD_TIMER);
+		tegra_pmc_writel((unsigned long)ticks, PMC_CPUPWRGOOD_TIMER);
 
 		ticks = (us_off * pclk) + 999999ull;
 		do_div(ticks, 1000000);
-		writel((unsigned long)ticks, pmc + PMC_CPUPWROFF_TIMER);
+		tegra_pmc_writel((unsigned long)ticks, PMC_CPUPWROFF_TIMER);
 		wmb();
 	}
 	tegra_last_pclk = pclk;
@@ -708,7 +706,7 @@ unsigned int tegra_idle_power_down_last(unsigned int sleep_time,
 	unsigned int remain;
 
 	/* Only the last cpu down does the final suspend steps */
-	reg = readl(pmc + PMC_CTRL);
+	reg = tegra_pmc_readl(PMC_CTRL);
 	reg |= TEGRA_POWER_CPU_PWRREQ_OE;
 	if (pdata->combined_req)
 		reg &= ~TEGRA_POWER_PWRREQ_OE;
@@ -716,7 +714,7 @@ unsigned int tegra_idle_power_down_last(unsigned int sleep_time,
 		reg |= TEGRA_POWER_PWRREQ_OE;
 
 	reg &= ~TEGRA_POWER_EFFECT_LP0;
-	writel(reg, pmc + PMC_CTRL);
+	tegra_pmc_writel(reg, PMC_CTRL);
 
 	/*
 	 * We can use clk_get_rate_all_locked() here, because all other cpus
@@ -895,7 +893,7 @@ static void tegra_common_resume(void)
 
 #if defined(CONFIG_ARCH_TEGRA_14x_SOC) || defined(CONFIG_ARCH_TEGRA_12x_SOC)
 	/* Clear DPD Enable */
-	writel(0x0, pmc + PMC_DPD_ENABLE);
+	tegra_pmc_writel(0x0, PMC_DPD_ENABLE);
 #endif
 
 	writel(tegra_sctx.mc[0], mc + MC_SECURITY_START);
@@ -905,9 +903,9 @@ static void tegra_common_resume(void)
 	/* trigger emc mode write */
 	writel(EMC_MRW_DEV_NONE, emc + EMC_MRW_0);
 	/* clear scratch registers shared by suspend and the reset pen */
-	writel(0x0, pmc + PMC_SCRATCH39);
+	tegra_pmc_writel(0x0, PMC_SCRATCH39);
 #endif
-	writel(0x0, pmc + PMC_SCRATCH41);
+	tegra_pmc_writel(0x0, PMC_SCRATCH41);
 
 	/* restore IRAM */
 	memcpy(iram_code, iram_save, iram_save_size);
@@ -936,7 +934,7 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 	u32 reg, boot_flag;
 	unsigned long rate = 32768;
 
-	reg = readl(pmc + PMC_CTRL);
+	reg = tegra_pmc_readl(PMC_CTRL);
 	reg |= TEGRA_POWER_CPU_PWRREQ_OE;
 	if (pdata->combined_req)
 		reg &= ~TEGRA_POWER_PWRREQ_OE;
@@ -960,25 +958,27 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 		 * the address in scratch 39, and the cpu to the address in
 		 * scratch 41 to tegra_resume
 		 */
-		writel(0x0, pmc + PMC_SCRATCH39);
+		tegra_pmc_writel(0x0, PMC_SCRATCH39);
 #endif
 
 		/* Enable DPD sample to trigger sampling pads data and direction
 		 * in which pad will be driven during lp0 mode*/
-		writel(0x1, pmc + PMC_DPD_SAMPLE);
+
+		tegra_pmc_writel(0x1, PMC_DPD_SAMPLE);
 #if !defined(CONFIG_ARCH_TEGRA_3x_SOC) && !defined(CONFIG_ARCH_TEGRA_2x_SOC)
 #if defined(CONFIG_ARCH_TEGRA_11x_SOC) || defined(CONFIG_ARCH_TEGRA_12x_SOC)
-		writel(0x800fdfff, pmc + PMC_IO_DPD_REQ);
-		readl(pmc + PMC_IO_DPD_REQ); /* unblock posted write */
+		tegra_pmc_writel(0x800fdfff, PMC_IO_DPD_REQ);
+		tegra_pmc_readl(PMC_IO_DPD_REQ); /* unblock posted write */
 
 		/* delay apb_clk * (SEL_DPD_TIM*5) */
 		udelay(700);
 		tegra_is_dpd_mode = true;
 #else
-		writel(0x800fffff, pmc + PMC_IO_DPD_REQ);
+		tegra_pmc_writel(0x800fffff, PMC_IO_DPD_REQ);
 #endif
-		writel(0x80001fff, pmc + PMC_IO_DPD2_REQ);
-		readl(pmc + PMC_IO_DPD2_REQ); /* unblock posted write */
+
+		tegra_pmc_writel(0x80001fff, PMC_IO_DPD2_REQ);
+		tegra_pmc_readl(PMC_IO_DPD2_REQ); /* unblock posted write */
 		udelay(700);
 #endif
 
@@ -988,7 +988,7 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 #endif
 
 		/* Set warmboot flag */
-		boot_flag = readl(pmc + PMC_SCRATCH0);
+		boot_flag = tegra_pmc_readl(PMC_SCRATCH0);
 		pmc_32kwritel(boot_flag | 1, PMC_SCRATCH0);
 
 		if (!tegra_cpu_is_secure())
@@ -998,7 +998,8 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 		/* No break here. LP0 code falls through to write SCRATCH41 */
 	case TEGRA_SUSPEND_LP1:
 		if (!tegra_cpu_is_secure())
-			__raw_writel(virt_to_phys(tegra_resume), pmc + PMC_SCRATCH41);
+			tegra_pmc_raw_writel(virt_to_phys(tegra_resume),
+			PMC_SCRATCH41);
 		wmb();
 		rate = clk_get_rate(tegra_clk_m);
 		break;
@@ -1160,12 +1161,12 @@ static void tegra_disable_lp1bb_interrupt(void)
 	/* mem_req = 0 was set as an interrupt during LP1BB entry.
 	 * It has to be disabled now
 	 */
-	reg = readl(pmc + PMC_CTRL2);
+	reg = tegra_pmc_readl(PMC_CTRL2);
 	reg &= ~(PMC_CTRL2_WAKE_DET_EN);
 	pmc_32kwritel(reg, PMC_CTRL2);
 
 	/* Program mem_req NOT to be a wake event */
-	reg = readl(pmc + PMC_WAKE2_MASK);
+	reg = tegra_pmc_readl(PMC_WAKE2_MASK);
 	reg &= ~(PMC_WAKE2_BB_MEM_REQ);
 	pmc_32kwritel(reg, PMC_WAKE2_MASK);
 
@@ -1236,7 +1237,7 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 
 	if (tegra_is_voice_call_active()) {
 		/* backup the current value of scratch37 */
-		scratch37 = readl(pmc + PMC_SCRATCH37);
+		scratch37 = tegra_pmc_readl(PMC_SCRATCH37);
 
 		/* If voice call is active, set a flag in PMC_SCRATCH37 */
 		reg = TEGRA_POWER_LP1_AUDIO;
@@ -1277,7 +1278,7 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 
 	if (mode == TEGRA_SUSPEND_LP0) {
 #ifdef CONFIG_TEGRA_CLUSTER_CONTROL
-		reg = readl(pmc + PMC_SCRATCH4);
+		reg = tegra_pmc_readl(PMC_SCRATCH4);
 		if (is_lp_cluster())
 			reg |= PMC_SCRATCH4_WAKE_CLUSTER_MASK;
 		else
@@ -1387,7 +1388,7 @@ int tegra_suspend_dram(enum tegra_suspend_mode mode, unsigned int flags)
 	 * of LP0 state by temporarily enabling both requests
 	 */
 	if (mode == TEGRA_SUSPEND_LP0 && pdata->combined_req) {
-		reg = readl(pmc + PMC_CTRL);
+		reg = tegra_pmc_readl(PMC_CTRL);
 		reg |= TEGRA_POWER_CPU_PWRREQ_OE;
 		pmc_32kwritel(reg, PMC_CTRL);
 		reg &= ~TEGRA_POWER_PWRREQ_OE;
@@ -1766,26 +1767,26 @@ out:
 #endif
 	/* !!!FIXME!!! THIS IS TEGRA2 ONLY */
 	/* Initialize scratch registers used for CPU LP2 synchronization */
-	writel(0, pmc + PMC_SCRATCH37);
-	writel(0, pmc + PMC_SCRATCH38);
+	tegra_pmc_writel(0, PMC_SCRATCH37);
+	tegra_pmc_writel(0, PMC_SCRATCH38);
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
-	writel(0, pmc + PMC_SCRATCH39);
+	tegra_pmc_writel(0, PMC_SCRATCH39);
 #endif
 	if (!tegra_cpu_is_secure())
-		writel(0, pmc + PMC_SCRATCH41);
+		tegra_pmc_writel(0, PMC_SCRATCH41);
 
 	/* Always enable CPU power request; just normal polarity is supported */
-	reg = readl(pmc + PMC_CTRL);
+	reg = tegra_pmc_readl(PMC_CTRL);
 	BUG_ON(reg & TEGRA_POWER_CPU_PWRREQ_POLARITY);
 	reg |= TEGRA_POWER_CPU_PWRREQ_OE;
 	pmc_32kwritel(reg, PMC_CTRL);
 
 	/* Configure core power request and system clock control if LP0
 	   is supported */
-	__raw_writel(pdata->core_timer, pmc + PMC_COREPWRGOOD_TIMER);
-	__raw_writel(pdata->core_off_timer, pmc + PMC_COREPWROFF_TIMER);
+	tegra_pmc_raw_writel(pdata->core_timer, PMC_COREPWRGOOD_TIMER);
+	tegra_pmc_raw_writel(pdata->core_off_timer, PMC_COREPWROFF_TIMER);
 
-	reg = readl(pmc + PMC_CTRL);
+	reg = tegra_pmc_readl(PMC_CTRL);
 
 	if (!pdata->sysclkreq_high)
 		reg |= TEGRA_POWER_SYSCLK_POLARITY;
@@ -1807,7 +1808,7 @@ out:
 	pmc_32kwritel(reg, PMC_CTRL);
 
 	if (pdata->sysclkreq_gpio) {
-		reg = readl(pmc + PMC_DPAD_ORIDE);
+		reg = tegra_pmc_readl(PMC_DPAD_ORIDE);
 		reg &= ~TEGRA_DPAD_ORIDE_SYS_CLK_REQ;
 		pmc_32kwritel(reg, PMC_DPAD_ORIDE);
 	}
@@ -1996,7 +1997,7 @@ static void update_pmc_registers(unsigned long rate)
 	void __iomem *base = ioremap(base2, tegra_wb0_params_block_size);
 
 #define copy_dram_to_pmc(index, bit)	\
-	pmc_32kwritel(readl(base + PMC_REGISTER_OFFSET(index, bit)), \
+	pmc_32kwritel(tegra_pmc_readl(PMC_REGISTER_OFFSET(index, bit)), \
 		PMC_REGISTER_OFFSET(index, bit) + PMC_SCRATCH0)
 
 
@@ -2029,11 +2030,6 @@ static void update_pmc_registers(unsigned long rate)
 static u32 tsc_suspend_start;
 static u32 tsc_resume_start;
 
-#define pmc_writel(value, reg) \
-		writel(value, pmc + (reg))
-#define pmc_readl(reg) \
-		readl(pmc + (reg))
-
 #define PMC_DPD_ENABLE			0x24
 #define PMC_DPD_ENABLE_TSC_MULT_ENABLE	(1 << 1)
 #if defined(CONFIG_ARCH_TEGRA_12x_SOC)
@@ -2048,10 +2044,10 @@ static u32 tsc_resume_start;
 void tegra_tsc_suspend(void)
 {
 	if (arch_timer_initialized) {
-		u32 reg = pmc_readl(PMC_DPD_ENABLE);
+		u32 reg = tegra_pmc_readl(PMC_DPD_ENABLE);
 		BUG_ON(reg & PMC_DPD_ENABLE_TSC_MULT_ENABLE);
 		reg |= PMC_DPD_ENABLE_TSC_MULT_ENABLE;
-		pmc_writel(reg, PMC_DPD_ENABLE);
+		tegra_pmc_writel(reg, PMC_DPD_ENABLE);
 		tsc_suspend_start = timer_readl(TIMERUS_CNTR_1US);
 	}
 }
@@ -2059,7 +2055,7 @@ void tegra_tsc_suspend(void)
 void tegra_tsc_resume(void)
 {
 	if (arch_timer_initialized) {
-		u32 reg = pmc_readl(PMC_DPD_ENABLE);
+		u32 reg = tegra_pmc_readl(PMC_DPD_ENABLE);
 		BUG_ON(!(reg & PMC_DPD_ENABLE_TSC_MULT_ENABLE));
 		reg &= ~PMC_DPD_ENABLE_TSC_MULT_ENABLE;
 #if defined(CONFIG_ARCH_TEGRA_12x_SOC)
@@ -2070,7 +2066,7 @@ void tegra_tsc_resume(void)
 		 */
 		reg &= ~PMC_DPD_ENABLE_ON;
 #endif
-		pmc_writel(reg, PMC_DPD_ENABLE);
+		tegra_pmc_writel(reg, PMC_DPD_ENABLE);
 		tsc_resume_start = timer_readl(TIMERUS_CNTR_1US);
 	}
 }
@@ -2080,7 +2076,8 @@ void tegra_tsc_wait_for_suspend(void)
 	if (arch_timer_initialized) {
 		while ((timer_readl(TIMERUS_CNTR_1US) - tsc_suspend_start) <
 			TSC_TIMEOUT_US) {
-			if (pmc_readl(PMC_TSC_MULT) & PMC_TSC_MULT_FREQ_STS)
+			if (tegra_pmc_readl(PMC_TSC_MULT) &
+				PMC_TSC_MULT_FREQ_STS)
 				break;
 			cpu_relax();
 		}
@@ -2092,7 +2089,8 @@ void tegra_tsc_wait_for_resume(void)
 	if (arch_timer_initialized) {
 		while ((timer_readl(TIMERUS_CNTR_1US) - tsc_resume_start) <
 			TSC_TIMEOUT_US) {
-			if (!(pmc_readl(PMC_TSC_MULT) & PMC_TSC_MULT_FREQ_STS))
+			if (!(tegra_pmc_readl(PMC_TSC_MULT) &
+				PMC_TSC_MULT_FREQ_STS))
 				break;
 			cpu_relax();
 		}

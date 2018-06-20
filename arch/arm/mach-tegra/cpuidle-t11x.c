@@ -3,7 +3,7 @@
  *
  * CPU idle driver for Tegra11x CPUs
  *
- * Copyright (c) 2012-2015, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,11 +65,11 @@
 #include "reset.h"
 #include "sleep.h"
 #include "tegra_ptm.h"
+#include <linux/tegra-pmc.h>
 
 #define CLK_RST_CONTROLLER_CPU_CMPLX_STATUS \
 	(IO_ADDRESS(TEGRA_CLK_RESET_BASE) + 0x470)
-#define PMC_POWERGATE_STATUS \
-	(IO_ADDRESS(TEGRA_PMC_BASE) + 0x038)
+#define PMC_POWERGATE_STATUS  0x038
 
 #define ARCH_TIMER_CTRL_ENABLE          (1 << 0)
 #define ARCH_TIMER_CTRL_IT_MASK         (1 << 1)
@@ -151,7 +151,7 @@ void tegra11x_cpu_idle_stats_pd_time(unsigned int cpu, s64 us)
 static bool tegra_rail_off_is_allowed(void)
 {
 	u32 rst = readl(CLK_RST_CONTROLLER_CPU_CMPLX_STATUS);
-	u32 pg = readl(PMC_POWERGATE_STATUS) >> 8;
+	u32 pg = tegra_pmc_readl(PMC_POWERGATE_STATUS) >> 8;
 
 	if (((rst & 0xE) != 0xE) || ((pg & 0xE) != 0))
 		return false;
