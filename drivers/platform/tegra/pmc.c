@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2012-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -23,8 +23,7 @@
 #include <linux/of_address.h>
 #include <linux/export.h>
 #include <linux/tegra-pmc.h>
-
-
+#include "../../../arch/arm/mach-tegra/iomap.h"
 
 #define PMC_CTRL			0x0
 #define PMC_CTRL_INTR_LOW		(1 << 17)
@@ -77,6 +76,60 @@
 #define PMU_I2C_ADDRESS_SHIFT			0
 #define PMU_I2C_ADDRESS_MASK			0x7f
 
+#define NR_SMC_REGS			6
+#define PMC_READ			0xaa
+#define PMC_WRITE			0xbb
+#define TEGRA_SIP_PMC_COMMAND_FID	0x82fffe00
+
+static bool get_secure_pmc_setting(void);
+
+struct pmc_smc_regs {
+#ifdef CONFIG_ARM64
+	u64 args[NR_SMC_REGS];
+#else
+	u32 args[NR_SMC_REGS];
+#endif
+};
+
+static void send_smc(u32 func, struct pmc_smc_regs *regs)
+{
+	u32 ret = func;
+
+#ifdef CONFIG_ARM64
+	asm volatile(
+		"mov x0, %0\n"
+		"ldp x1, x2, [%1, #16 * 0]\n"
+		"ldp x3, x4, [%1, #16 * 1]\n"
+		"ldp x5, x6, [%1, #16 * 2]\n"
+		"smc #0\n"
+		"mov %0, x0\n"
+		"stp x1, x2, [%1, #16 * 0]\n"
+		: "+r" (ret)
+		: "r" (regs)
+		: "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8",
+		  "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17");
+#else
+	asm volatile (
+	"	mov	r0, %0\n"
+	"	ldr	r1, [%1, #4 * 0]\n"
+	"	ldr	r2, [%1, #4 * 1]\n"
+	"	ldr	r3, [%1, #4 * 2]\n"
+	"	ldr	r4, [%1, #4 * 3]\n"
+	"	ldr	r5, [%1, #4 * 4]\n"
+	"	ldr	r6, [%1, #4 * 5]\n"
+	"	smc	#0\n"
+	"	mov	%0, r0\n"
+	"	str	r1, [%1, #4 * 0]\n"
+	"	str	r2, [%1, #4 * 1]\n"
+	: "+r" (ret)
+	: "r" (regs)
+	: "r0", "r1", "r2", "r3", "r4", "r5", "r6");
+#endif
+
+	if (ret)
+		pr_err("%s: failed (ret=%d)\n", __func__, ret);
+}
+
 static u8 tegra_cpu_domains[] = {
 	0xFF,			/* not available for CPU0 */
 	TEGRA_POWERGATE_CPU1,
@@ -109,15 +162,78 @@ struct pmc_pm_data *tegra_get_pm_data()
 }
 EXPORT_SYMBOL(tegra_get_pm_data);
 
-static inline u32 tegra_pmc_readl(u32 reg)
+/* PMC register read/write/update with offset from the base */
+u32 tegra_pmc_readl(u32 offset)
 {
-	return readl(tegra_pmc_base + reg);
-}
+	struct pmc_smc_regs regs;
 
-static inline void tegra_pmc_writel(u32 val, u32 reg)
-{
-	writel(val, tegra_pmc_base + reg);
+	if (get_secure_pmc_setting()) {
+		regs.args[0] = PMC_READ;
+		regs.args[1] = offset;
+		regs.args[2] = 0;
+		regs.args[3] = 0;
+		regs.args[4] = 0;
+		regs.args[5] = 0;
+		send_smc(TEGRA_SIP_PMC_COMMAND_FID, &regs);
+		return (u32)regs.args[0];
+	}
+	return readl(tegra_pmc_base + offset);
 }
+EXPORT_SYMBOL(tegra_pmc_readl);
+
+void tegra_pmc_writel(u32 value, u32 offset)
+{
+	struct pmc_smc_regs regs;
+
+	if (get_secure_pmc_setting()) {
+		regs.args[0] = PMC_WRITE;
+		regs.args[1] = offset;
+		regs.args[2] = value;
+		regs.args[3] = 0;
+		regs.args[4] = 0;
+		regs.args[5] = 0;
+		send_smc(TEGRA_SIP_PMC_COMMAND_FID, &regs);
+	} else {
+		writel(value, tegra_pmc_base + offset);
+	}
+}
+EXPORT_SYMBOL(tegra_pmc_writel);
+
+u32 tegra_pmc_raw_readl(u32 offset)
+{
+	if (get_secure_pmc_setting())
+		return tegra_pmc_readl(offset);
+	else
+		return __raw_readl(tegra_pmc_base + offset);
+}
+EXPORT_SYMBOL(tegra_pmc_raw_readl);
+
+void tegra_pmc_raw_writel(u32 value, u32 offset)
+{
+	if (get_secure_pmc_setting())
+		tegra_pmc_writel(value, offset);
+	else
+		__raw_writel(value, tegra_pmc_base + offset);
+}
+EXPORT_SYMBOL(tegra_pmc_raw_writel);
+
+u32 tegra_pmc_readl_relaxed(u32 offset)
+{
+	if (get_secure_pmc_setting())
+		return tegra_pmc_readl(offset);
+	else
+		return readl_relaxed(tegra_pmc_base + offset);
+}
+EXPORT_SYMBOL(tegra_pmc_readl_relaxed);
+
+void tegra_pmc_writel_relaxed(u32 value, u32 offset)
+{
+	if (get_secure_pmc_setting())
+		tegra_pmc_writel(value, offset);
+	else
+		writel_relaxed(value, tegra_pmc_base + offset);
+}
+EXPORT_SYMBOL(tegra_pmc_writel_relaxed);
 
 /**
  * _compute_pmic_checksum - compute checksum for some PMC_SCRATCH regs
@@ -447,6 +563,30 @@ static void tegra_pmc_parse_dt(void)
 	pmc_pm_data.lp0_vec_size = lp0_vec[1];
 
 	pmc_pm_data.suspend_mode = suspend_mode;
+}
+
+static bool get_secure_pmc_setting(void)
+{
+	struct device_node *np;
+	static bool secure_pmc;
+	static bool initialized;
+
+	if (!initialized) {
+		initialized = true;
+		np = of_find_matching_node(NULL, matches);
+		if (!np) {
+			pr_err("%s: compatible node not found\n", __func__);
+			secure_pmc = false;
+			return secure_pmc;
+		}
+		secure_pmc = of_find_property(np, "nvidia,secure-pmc", NULL);
+		pr_info("%s: done secure_pmc=%d\n", __func__, secure_pmc);
+
+		if (!secure_pmc)
+			if (!tegra_pmc_base)
+				tegra_pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
+	}
+	return secure_pmc;
 }
 
 static int __init tegra_pmc_init(void)

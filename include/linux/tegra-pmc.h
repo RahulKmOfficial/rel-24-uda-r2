@@ -1,7 +1,7 @@
 /*
  * PMC interface for NVIDIA SoCs Tegra
  *
- * Copyright (c) 2013-2014, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2013-2018, NVIDIA CORPORATION.  All rights reserved.
  *
  * Author: Laxman Dewangan <ldewangan@nvidia.com>
  *
@@ -29,6 +29,13 @@ extern void tegra_pmc_remove_dpd_req(void);
 extern void __iomem *tegra_pmc_base;
 
 extern bool tegra_is_dpd_mode;
+
+extern u32 tegra_pmc_readl(u32 offset);
+extern void tegra_pmc_writel(u32 value, u32 offset);
+extern u32 tegra_pmc_raw_readl(u32 offset);
+extern void tegra_pmc_raw_writel(u32 value, u32 offset);
+extern u32 tegra_pmc_readl_relaxed(u32 offset);
+extern void tegra_pmc_writel_relaxed(u32 value, u32 offset);
 
 struct pmc_pm_data {
 	u32 cpu_good_time;	/* CPU power good time in uS */
