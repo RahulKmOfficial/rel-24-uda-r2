@@ -929,6 +929,7 @@ static int mmc_select_highspeed(struct mmc_card *card)
 
 	host = card->host;
 
+	mmc_set_clock(host, MMC_HIGH_52_MAX_DTR);
 	/* Switch to High Speed mode */
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 			EXT_CSD_HS_TIMING, 1,
@@ -941,7 +942,6 @@ static int mmc_select_highspeed(struct mmc_card *card)
 
 	mmc_card_set_highspeed(card);
 	mmc_set_timing(host, MMC_TIMING_MMC_HS);
-	mmc_set_clock(host, MMC_HIGH_52_MAX_DTR);
 
 	return err;
 }
